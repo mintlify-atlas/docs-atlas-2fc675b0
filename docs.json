@@ -77,6 +77,7 @@
             "pages": [
               "api/auth/login",
               "api/auth/logout",
+              "api/auth/me",
               "api/auth/initialize"
             ]
           },
@@ -102,7 +103,9 @@
           {
             "group": "Electronic Documents",
             "pages": [
+              "api/documents/list-invoices",
               "api/documents/create-invoice",
+              "api/documents/get-invoice",
               "api/documents/create-boleta",
               "api/documents/send-to-sunat",
               "api/documents/download-xml",

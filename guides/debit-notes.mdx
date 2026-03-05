@@ -7,6 +7,10 @@ description: 'Complete guide to creating electronic debit notes (Notas de Débit
 
 Debit Notes (Notas de Débito) are used to increase the total amount of a previously issued invoice or boleta. Common use cases include interest charges, penalties, or additional services.
 
+<Note>
+**Service Layer Only**: Debit notes are currently implemented in the `DocumentService` class but do not yet have REST API endpoints exposed. To use this functionality, you'll need to interact directly with the service layer in your Laravel application. REST API endpoints are planned for a future release.
+</Note>
+
 ## Prerequisites
 
 - An existing invoice or boleta to modify

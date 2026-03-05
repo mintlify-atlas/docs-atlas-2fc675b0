@@ -7,6 +7,10 @@ description: 'Complete guide to creating electronic credit notes (Notas de Créd
 
 Credit Notes (Notas de Crédito) are used to correct or cancel previously issued invoices or boletas. They reduce the total amount owed by the client.
 
+<Note>
+**Service Layer Only**: Credit notes are currently implemented in the `DocumentService` class but do not yet have REST API endpoints exposed. To use this functionality, you'll need to interact directly with the service layer in your Laravel application. REST API endpoints are planned for a future release.
+</Note>
+
 ## Prerequisites
 
 - An existing invoice or boleta to correct
