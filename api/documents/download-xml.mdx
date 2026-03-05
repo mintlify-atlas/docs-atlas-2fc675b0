@@ -1,0 +1,337 @@
+---
+title: Download XML
+api: GET /api/v1/invoices/{id}/download-xml
+---
+
+Downloads the signed XML file of an invoice or boleta. The XML file contains the electronic document in UBL 2.1 format as required by SUNAT.
+
+<Note>
+This endpoint works for both invoices and boletas. Use `/api/v1/invoices/{id}/download-xml` for invoices and `/api/v1/boletas/{id}/download-xml` for boletas.
+</Note>
+
+## Authentication
+
+This endpoint requires authentication using a Bearer token (Sanctum).
+
+```bash
+Authorization: Bearer YOUR_API_TOKEN
+```
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The ID of the invoice or boleta whose XML file you want to download.
+</ParamField>
+
+## Response
+
+### Success Response
+
+Returns the XML file as a download with appropriate headers:
+
+- **Content-Type**: `application/xml`
+- **Content-Disposition**: `attachment; filename="{ruc}-{tipo}-{serie}-{numero}.xml"`
+
+The XML file follows SUNAT's UBL 2.1 specification and includes:
+
+- Company and branch information (issuer)
+- Client information (recipient)
+- Document details (date, currency, totals)
+- Line items with tax calculations
+- Digital signature
+
+### Error Response
+
+<ResponseField name="success" type="boolean">
+  Always `false` for error responses.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message describing why the XML couldn't be downloaded.
+</ResponseField>
+
+## Request Examples
+
+<CodeGroup>
+
+```bash cURL - Invoice
+curl -X GET https://api.example.com/api/v1/invoices/123/download-xml \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -O -J
+```
+
+```bash cURL - Boleta
+curl -X GET https://api.example.com/api/v1/boletas/456/download-xml \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -O -J
+```
+
+```javascript JavaScript
+// Download invoice XML
+const response = await fetch('https://api.example.com/api/v1/invoices/123/download-xml', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+
+if (response.ok) {
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'invoice.xml';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// Download boleta XML
+const boletaResponse = await fetch('https://api.example.com/api/v1/boletas/456/download-xml', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+
+if (boletaResponse.ok) {
+  const blob = await boletaResponse.blob();
+  // Handle blob...
+}
+```
+
+```php PHP
+$client = new GuzzleHttp\Client();
+
+// Download invoice XML
+$response = $client->get('https://api.example.com/api/v1/invoices/123/download-xml', [
+    'headers' => [
+        'Authorization' => 'Bearer YOUR_API_TOKEN',
+    ],
+    'sink' => '/path/to/save/invoice.xml'
+]);
+
+// Download boleta XML
+$boletaResponse = $client->get('https://api.example.com/api/v1/boletas/456/download-xml', [
+    'headers' => [
+        'Authorization' => 'Bearer YOUR_API_TOKEN',
+    ],
+    'sink' => '/path/to/save/boleta.xml'
+]);
+```
+
+```python Python
+import requests
+
+# Download invoice XML
+response = requests.get(
+    'https://api.example.com/api/v1/invoices/123/download-xml',
+    headers={
+        'Authorization': 'Bearer YOUR_API_TOKEN'
+    },
+    stream=True
+)
+
+if response.status_code == 200:
+    with open('invoice.xml', 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+# Download boleta XML
+boleta_response = requests.get(
+    'https://api.example.com/api/v1/boletas/456/download-xml',
+    headers={
+        'Authorization': 'Bearer YOUR_API_TOKEN'
+    },
+    stream=True
+)
+
+if boleta_response.status_code == 200:
+    with open('boleta.xml', 'wb') as f:
+        for chunk in boleta_response.iter_content(chunk_size=8192):
+            f.write(chunk)
+```
+
+</CodeGroup>
+
+## Response Examples
+
+<CodeGroup>
+
+```xml Success (200) - XML File
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" 
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" 
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" 
+         xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+    <ext:UBLExtensions>
+        <ext:UBLExtension>
+            <ext:ExtensionContent>
+                <!-- Digital Signature -->
+            </ext:ExtensionContent>
+        </ext:UBLExtension>
+    </ext:UBLExtensions>
+    <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+    <cbc:CustomizationID>2.0</cbc:CustomizationID>
+    <cbc:ID>F001-456</cbc:ID>
+    <cbc:IssueDate>2024-03-15</cbc:IssueDate>
+    <cbc:InvoiceTypeCode listID="0101">01</cbc:InvoiceTypeCode>
+    <cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode>
+    
+    <!-- Supplier (Company) -->
+    <cac:AccountingSupplierParty>
+        <cac:Party>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="6">20987654321</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyLegalEntity>
+                <cbc:RegistrationName>MI EMPRESA SAC</cbc:RegistrationName>
+            </cac:PartyLegalEntity>
+        </cac:Party>
+    </cac:AccountingSupplierParty>
+    
+    <!-- Customer -->
+    <cac:AccountingCustomerParty>
+        <cac:Party>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="6">20123456789</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyLegalEntity>
+                <cbc:RegistrationName>EMPRESA DEMO SAC</cbc:RegistrationName>
+            </cac:PartyLegalEntity>
+        </cac:Party>
+    </cac:AccountingCustomerParty>
+    
+    <!-- Tax Total -->
+    <cac:TaxTotal>
+        <cbc:TaxAmount currencyID="PEN">90.00</cbc:TaxAmount>
+        <cac:TaxSubtotal>
+            <cbc:TaxableAmount currencyID="PEN">500.00</cbc:TaxableAmount>
+            <cbc:TaxAmount currencyID="PEN">90.00</cbc:TaxAmount>
+            <cac:TaxCategory>
+                <cac:TaxScheme>
+                    <cbc:ID>1000</cbc:ID>
+                    <cbc:Name>IGV</cbc:Name>
+                    <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+                </cac:TaxScheme>
+            </cac:TaxCategory>
+        </cac:TaxSubtotal>
+    </cac:TaxTotal>
+    
+    <!-- Legal Monetary Total -->
+    <cac:LegalMonetaryTotal>
+        <cbc:PayableAmount currencyID="PEN">590.00</cbc:PayableAmount>
+    </cac:LegalMonetaryTotal>
+    
+    <!-- Invoice Lines -->
+    <cac:InvoiceLine>
+        <cbc:ID>1</cbc:ID>
+        <cbc:InvoicedQuantity unitCode="ZZ">1</cbc:InvoicedQuantity>
+        <cbc:LineExtensionAmount currencyID="PEN">500.00</cbc:LineExtensionAmount>
+        <cac:Item>
+            <cbc:Description>SERVICIO DE CONSULTORIA</cbc:Description>
+        </cac:Item>
+        <cac:Price>
+            <cbc:PriceAmount currencyID="PEN">500.00</cbc:PriceAmount>
+        </cac:Price>
+    </cac:InvoiceLine>
+</Invoice>
+```
+
+```json XML Not Found (404)
+{
+  "success": false,
+  "message": "XML no encontrado"
+}
+```
+
+```json Document Not Found (404)
+{
+  "success": false,
+  "message": "Error al descargar XML",
+  "error": "No query results for model [App\\Models\\Invoice] 999"
+}
+```
+
+```json System Error (500)
+{
+  "success": false,
+  "message": "Error al descargar XML",
+  "error": "Storage disk not accessible"
+}
+```
+
+</CodeGroup>
+
+## XML File Naming Convention
+
+The downloaded XML file follows SUNAT's naming convention:
+
+```
+{RUC}-{TIPO_DOC}-{SERIE}-{NUMERO}.xml
+```
+
+**Examples:**
+- Invoice: `20987654321-01-F001-456.xml`
+- Boleta: `20987654321-03-B001-1523.xml`
+
+Where:
+- **RUC**: Company's tax identification number
+- **TIPO_DOC**: Document type code (01=Invoice, 03=Boleta)
+- **SERIE**: Document series
+- **NUMERO**: Document number
+
+## XML File Structure
+
+The XML file contains:
+
+### Header Information
+- UBL version (2.1)
+- Document ID (serie-numero)
+- Issue date
+- Document type code
+- Currency code
+
+### Parties
+- **Supplier**: Issuing company information (RUC, business name, address)
+- **Customer**: Client information (document type, number, name)
+
+### Monetary Totals
+- Taxable amount (base imponible)
+- Tax amounts (IGV, ISC, ICBPER)
+- Total amount including taxes
+
+### Line Items
+- Product/service descriptions
+- Quantities and units
+- Unit prices (excluding taxes)
+- Item totals
+- Tax details per item
+
+### Digital Signature
+- X509 certificate
+- Signature value
+- Signed properties
+
+## When is the XML Available?
+
+The XML file is generated when:
+
+1. You call the [Send to SUNAT](/api/documents/send-to-sunat) endpoint
+2. The document is successfully processed (regardless of acceptance or rejection)
+
+<Warning>
+If the document hasn't been sent to SUNAT yet, the XML file won't exist and you'll receive a 404 error.
+</Warning>
+
+## Use Cases
+
+- **Archival**: Store XML files for legal compliance (required for 5 years in Peru)
+- **Validation**: Verify document content and digital signature
+- **Integration**: Send XML to third-party systems
+- **Debugging**: Review the exact data sent to SUNAT
+- **Re-submission**: Use with external SUNAT tools if needed
+
+## Related Endpoints
+
+- [Send to SUNAT](/api/documents/send-to-sunat) - Generates the XML file
+- [Download CDR](/api/documents/download-cdr) - Download SUNAT's response
+- [Download PDF](/api/documents/download-pdf) - Download printable version

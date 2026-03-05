@@ -1,0 +1,300 @@
+---
+title: "Create Company"
+api: "POST /api/v1/companies"
+---
+
+Create a new company in the system with SUNAT credentials and configuration.
+
+## Authentication
+
+This endpoint requires authentication. Include your API token in the request header:
+
+```bash
+Authorization: Bearer YOUR_API_TOKEN
+```
+
+## Request Body
+
+<ParamField path="ruc" type="string" required>
+  11-digit tax identification number (RUC). Must be unique in the system.
+</ParamField>
+
+<ParamField path="razon_social" type="string" required>
+  Legal business name (max 255 characters)
+</ParamField>
+
+<ParamField path="nombre_comercial" type="string">
+  Commercial or trading name (max 255 characters)
+</ParamField>
+
+<ParamField path="direccion" type="string" required>
+  Business address (max 255 characters)
+</ParamField>
+
+<ParamField path="ubigeo" type="string" required>
+  6-digit UBIGEO code for geographic location
+</ParamField>
+
+<ParamField path="distrito" type="string" required>
+  District name (max 100 characters)
+</ParamField>
+
+<ParamField path="provincia" type="string" required>
+  Province name (max 100 characters)
+</ParamField>
+
+<ParamField path="departamento" type="string" required>
+  Department/region name (max 100 characters)
+</ParamField>
+
+<ParamField path="telefono" type="string">
+  Phone number (max 20 characters)
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  Company email address (max 255 characters, must be valid email format)
+</ParamField>
+
+<ParamField path="web" type="string">
+  Company website URL (max 255 characters, must be valid URL)
+</ParamField>
+
+<ParamField path="usuario_sol" type="string" required>
+  SUNAT SOL username (max 50 characters)
+</ParamField>
+
+<ParamField path="clave_sol" type="string" required>
+  SUNAT SOL password (max 100 characters)
+</ParamField>
+
+<ParamField path="certificado_pem" type="file">
+  Digital certificate file (.pem, .crt, .cer, .txt, max 2MB)
+</ParamField>
+
+<ParamField path="certificado_password" type="string">
+  Password for the digital certificate (max 100 characters)
+</ParamField>
+
+<ParamField path="endpoint_beta" type="string">
+  Custom SUNAT beta endpoint URL. If not provided, defaults to SUNAT's standard beta endpoint.
+</ParamField>
+
+<ParamField path="endpoint_produccion" type="string">
+  Custom SUNAT production endpoint URL. If not provided, defaults to SUNAT's standard production endpoint.
+</ParamField>
+
+<ParamField path="modo_produccion" type="string">
+  Environment mode: `true`, `false`, `1`, or `0`. Defaults to `false` (beta mode).
+</ParamField>
+
+<ParamField path="logo_path" type="file">
+  Company logo image (.png, .jpg, .jpeg, max 2MB)
+</ParamField>
+
+<ParamField path="activo" type="boolean">
+  Active status. Defaults to `true`.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the company was created successfully
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Success message
+</ResponseField>
+
+<ResponseField name="data" type="object" required>
+  The created company object with configurations
+  
+  <Expandable title="Company Object">
+    <ResponseField name="id" type="integer">
+      Unique identifier for the company
+    </ResponseField>
+    
+    <ResponseField name="ruc" type="string">
+      11-digit tax identification number
+    </ResponseField>
+    
+    <ResponseField name="razon_social" type="string">
+      Legal business name
+    </ResponseField>
+    
+    <ResponseField name="nombre_comercial" type="string">
+      Commercial name
+    </ResponseField>
+    
+    <ResponseField name="direccion" type="string">
+      Business address
+    </ResponseField>
+    
+    <ResponseField name="email" type="string">
+      Company email
+    </ResponseField>
+    
+    <ResponseField name="modo_produccion" type="boolean">
+      Production mode status
+    </ResponseField>
+    
+    <ResponseField name="activo" type="boolean">
+      Active status
+    </ResponseField>
+    
+    <ResponseField name="configurations" type="array">
+      Array of company configuration objects
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="string">
+      Creation timestamp
+    </ResponseField>
+    
+    <ResponseField name="updated_at" type="string">
+      Last update timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash cURL
+curl -X POST https://api.yourdomain.com/api/v1/companies \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ruc": "20123456789",
+    "razon_social": "EMPRESA DEMO S.A.C.",
+    "nombre_comercial": "Demo Corp",
+    "direccion": "Av. Los Olivos 123",
+    "ubigeo": "150101",
+    "distrito": "San Isidro",
+    "provincia": "Lima",
+    "departamento": "Lima",
+    "telefono": "01-1234567",
+    "email": "contacto@democorp.com",
+    "usuario_sol": "MODDATOS",
+    "clave_sol": "MODDATOS",
+    "modo_produccion": false,
+    "activo": true
+  }'
+```
+
+```php PHP
+$client = new \GuzzleHttp\Client();
+
+$response = $client->request('POST', 'https://api.yourdomain.com/api/v1/companies', [
+  'headers' => [
+    'Authorization' => 'Bearer YOUR_API_TOKEN',
+    'Content-Type' => 'application/json',
+  ],
+  'json' => [
+    'ruc' => '20123456789',
+    'razon_social' => 'EMPRESA DEMO S.A.C.',
+    'nombre_comercial' => 'Demo Corp',
+    'direccion' => 'Av. Los Olivos 123',
+    'ubigeo' => '150101',
+    'distrito' => 'San Isidro',
+    'provincia' => 'Lima',
+    'departamento' => 'Lima',
+    'telefono' => '01-1234567',
+    'email' => 'contacto@democorp.com',
+    'usuario_sol' => 'MODDATOS',
+    'clave_sol' => 'MODDATOS',
+    'modo_produccion' => false,
+    'activo' => true,
+  ],
+]);
+
+echo $response->getBody();
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.yourdomain.com/api/v1/companies', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    ruc: '20123456789',
+    razon_social: 'EMPRESA DEMO S.A.C.',
+    nombre_comercial: 'Demo Corp',
+    direccion: 'Av. Los Olivos 123',
+    ubigeo: '150101',
+    distrito: 'San Isidro',
+    provincia: 'Lima',
+    departamento: 'Lima',
+    telefono: '01-1234567',
+    email: 'contacto@democorp.com',
+    usuario_sol: 'MODDATOS',
+    clave_sol: 'MODDATOS',
+    modo_produccion: false,
+    activo: true
+  })
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+## Example Response
+
+```json 201 Created
+{
+  "success": true,
+  "message": "Empresa creada exitosamente",
+  "data": {
+    "id": 1,
+    "ruc": "20123456789",
+    "razon_social": "EMPRESA DEMO S.A.C.",
+    "nombre_comercial": "Demo Corp",
+    "direccion": "Av. Los Olivos 123",
+    "ubigeo": "150101",
+    "distrito": "San Isidro",
+    "provincia": "Lima",
+    "departamento": "Lima",
+    "telefono": "01-1234567",
+    "email": "contacto@democorp.com",
+    "usuario_sol": "MODDATOS",
+    "modo_produccion": false,
+    "activo": true,
+    "endpoint_beta": "https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService",
+    "endpoint_produccion": "https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService",
+    "configurations": [],
+    "created_at": "2024-03-05T10:30:00.000000Z",
+    "updated_at": "2024-03-05T10:30:00.000000Z"
+  }
+}
+```
+
+```json 422 Validation Error
+{
+  "success": false,
+  "message": "Errores de validación",
+  "errors": {
+    "ruc": [
+      "El RUC ya está registrado"
+    ],
+    "email": [
+      "El correo debe tener un formato válido"
+    ]
+  }
+}
+```
+
+```json 500 Error
+{
+  "success": false,
+  "message": "Error al crear empresa: Database error"
+}
+```
+
+<Note>
+**Default Endpoints**: If not specified, the system automatically assigns SUNAT's standard endpoints:
+- Beta: `https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService`
+- Production: `https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService`
+</Note>
+
+<Warning>
+**Security**: The `clave_sol`, `certificado_pem`, `certificado_password`, and GRE credentials are hidden in API responses for security.
+</Warning>

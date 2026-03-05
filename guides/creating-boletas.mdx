@@ -1,0 +1,558 @@
+---
+title: 'Creating Boletas (Sales Receipts)'
+description: 'Complete guide to creating electronic sales receipts with the SUNAT API'
+---
+
+## Overview
+
+Boletas de Venta (Sales Receipts) are electronic documents used for B2C transactions in Peru. Unlike invoices, boletas can be sent individually or via daily summary (Resumen Diario).
+
+## Prerequisites
+
+- Configured company with SUNAT credentials
+- Active branch with boleta series configured
+- Client with DNI or other valid document
+
+## Send Methods
+
+Boletas support two sending methods:
+
+<CodeGroup>
+
+```json Individual Send (Immediate)
+{
+  "metodo_envio": "individual"
+}
+```
+
+```json Daily Summary (Batch)
+{
+  "metodo_envio": "resumen_diario"
+}
+```
+
+</CodeGroup>
+
+<Note>
+Individual send provides immediate SUNAT response. Daily summary is processed asynchronously and requires checking status via ticket.
+</Note>
+
+## Creating a Boleta
+
+### Basic Boleta Creation
+
+<CodeGroup>
+
+```json Standard Boleta (DNI Client)
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "B001",
+  "fecha_emision": "2024-03-15",
+  "moneda": "PEN",
+  "tipo_operacion": "0101",
+  "metodo_envio": "individual",
+  "forma_pago_tipo": "Contado",
+  "client": {
+    "tipo_documento": "1",
+    "numero_documento": "12345678",
+    "razon_social": "JUAN PEREZ GOMEZ",
+    "direccion": "Av. Arequipa 1234",
+    "email": "juan.perez@email.com",
+    "telefono": "987654321"
+  },
+  "detalles": [
+    {
+      "codigo": "PROD001",
+      "descripcion": "Mouse inalámbrico Logitech M185",
+      "unidad": "NIU",
+      "cantidad": 2,
+      "mto_valor_unitario": 25.42,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    },
+    {
+      "codigo": "PROD002",
+      "descripcion": "Teclado USB básico",
+      "unidad": "NIU",
+      "cantidad": 1,
+      "mto_valor_unitario": 33.90,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+```json Boleta with ICBPER (Plastic Bag Tax)
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "B001",
+  "fecha_emision": "2024-03-15",
+  "moneda": "PEN",
+  "metodo_envio": "resumen_diario",
+  "client": {
+    "tipo_documento": "1",
+    "numero_documento": "00000000",
+    "razon_social": "CLIENTE VARIOS"
+  },
+  "detalles": [
+    {
+      "codigo": "ALIM001",
+      "descripcion": "Arroz Superior x 5kg",
+      "unidad": "NIU",
+      "cantidad": 3,
+      "mto_valor_unitario": 15.25,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    },
+    {
+      "codigo": "BOLSA",
+      "descripcion": "Bolsa plástica",
+      "unidad": "NIU",
+      "cantidad": 5,
+      "mto_valor_unitario": 0.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10",
+      "factor_icbper": 0.50,
+      "icbper": 2.50
+    }
+  ]
+}
+```
+
+```json Free Items Boleta
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "B001",
+  "fecha_emision": "2024-03-15",
+  "moneda": "PEN",
+  "metodo_envio": "individual",
+  "client": {
+    "tipo_documento": "1",
+    "numero_documento": "87654321",
+    "razon_social": "MARIA RODRIGUEZ"
+  },
+  "detalles": [
+    {
+      "codigo": "PROD100",
+      "descripcion": "Laptop Dell Inspiron 15",
+      "unidad": "NIU",
+      "cantidad": 1,
+      "mto_valor_unitario": 2500.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    },
+    {
+      "codigo": "PROM001",
+      "descripcion": "Mouse de regalo - Promoción",
+      "unidad": "NIU",
+      "cantidad": 1,
+      "mto_valor_unitario": 0.00,
+      "mto_valor_gratuito": 20.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "11"
+    }
+  ]
+}
+```
+
+```bash cURL Request
+curl -X POST https://api.example.com/api/boletas \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "company_id": 1,
+    "branch_id": 1,
+    "serie": "B001",
+    "fecha_emision": "2024-03-15",
+    "moneda": "PEN",
+    "metodo_envio": "individual",
+    "client": {
+      "tipo_documento": "1",
+      "numero_documento": "12345678",
+      "razon_social": "JUAN PEREZ"
+    },
+    "detalles": [{
+      "codigo": "PROD001",
+      "descripcion": "Producto",
+      "unidad": "NIU",
+      "cantidad": 1,
+      "mto_valor_unitario": 50.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }]
+  }'
+```
+
+</CodeGroup>
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 456,
+    "company_id": 1,
+    "branch_id": 1,
+    "tipo_documento": "03",
+    "serie": "B001",
+    "correlativo": "00000456",
+    "numero_completo": "B001-00000456",
+    "fecha_emision": "2024-03-15",
+    "moneda": "PEN",
+    "metodo_envio": "individual",
+    "mto_oper_gravadas": 84.74,
+    "mto_igv": 15.25,
+    "mto_imp_venta": 100.00,
+    "estado_sunat": "PENDIENTE"
+  },
+  "message": "Boleta creada correctamente"
+}
+```
+
+## Required Fields
+
+<ParamField path="company_id" type="integer" required>
+  Company ID issuing the boleta
+</ParamField>
+
+<ParamField path="branch_id" type="integer" required>
+  Branch ID (must belong to company)
+</ParamField>
+
+<ParamField path="serie" type="string" required>
+  Boleta series (max 4 characters, e.g., "B001")
+</ParamField>
+
+<ParamField path="fecha_emision" type="date" required>
+  Issue date (YYYY-MM-DD)
+</ParamField>
+
+<ParamField path="metodo_envio" type="string" required>
+  Send method: `individual` or `resumen_diario`
+</ParamField>
+
+<ParamField path="moneda" type="string" default="PEN">
+  Currency: `PEN` or `USD`
+</ParamField>
+
+### Client Requirements
+
+<ParamField path="client.tipo_documento" type="string" required>
+  Document type:
+  - `1`: DNI (most common)
+  - `4`: Carnet de Extranjería
+  - `7`: Passport
+  - `0`: Generic (00000000)
+</ParamField>
+
+<ParamField path="client.numero_documento" type="string" required>
+  Document number (8 digits for DNI)
+</ParamField>
+
+<ParamField path="client.razon_social" type="string" required>
+  Client's full name
+</ParamField>
+
+## Sending to SUNAT
+
+### Individual Send
+
+For boletas with `metodo_envio: "individual"`:
+
+```bash
+curl -X POST https://api.example.com/api/boletas/456/send-sunat \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 456,
+    "numero_completo": "B001-00000456",
+    "estado_sunat": "ACEPTADO",
+    "xml_path": "storage/companies/1/boletas/xml/...",
+    "cdr_path": "storage/companies/1/boletas/cdr/..."
+  },
+  "message": "Boleta enviada exitosamente a SUNAT"
+}
+```
+
+### Daily Summary Send
+
+For boletas with `metodo_envio: "resumen_diario"`, create and send a daily summary:
+
+<Steps>
+  <Step title="Get Pending Boletas">
+    Query boletas pending for summary on a specific date.
+  </Step>
+  
+  <Step title="Create Daily Summary">
+    Create summary from pending boletas.
+  </Step>
+  
+  <Step title="Send to SUNAT">
+    Send summary and receive ticket.
+  </Step>
+  
+  <Step title="Check Status">
+    Use ticket to check processing status.
+  </Step>
+</Steps>
+
+#### Get Pending Boletas
+
+```bash
+curl -X GET "https://api.example.com/api/boletas/pending-summary?company_id=1&branch_id=1&fecha_emision=2024-03-15" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 450,
+      "numero_completo": "B001-00000450",
+      "mto_imp_venta": 59.00
+    },
+    {
+      "id": 451,
+      "numero_completo": "B001-00000451",
+      "mto_imp_venta": 118.00
+    }
+  ],
+  "total": 2
+}
+```
+
+#### Create Daily Summary
+
+```bash
+curl -X POST https://api.example.com/api/boletas/create-daily-summary \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "company_id": 1,
+    "branch_id": 1,
+    "fecha_resumen": "2024-03-15"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 10,
+    "company_id": 1,
+    "branch_id": 1,
+    "correlativo": "001",
+    "fecha_resumen": "2024-03-15",
+    "fecha_generacion": "2024-03-16",
+    "estado_sunat": "PENDIENTE",
+    "boletas": [
+      { "id": 450, "numero_completo": "B001-00000450" },
+      { "id": 451, "numero_completo": "B001-00000451" }
+    ]
+  },
+  "message": "Resumen diario creado correctamente"
+}
+```
+
+#### Send Summary to SUNAT
+
+```bash
+curl -X POST https://api.example.com/api/boletas/summary/10/send-sunat \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 10,
+    "estado_sunat": "PROCESANDO",
+    "ticket": "1234567890123"
+  },
+  "ticket": "1234567890123",
+  "message": "Resumen enviado correctamente a SUNAT"
+}
+```
+
+<Note>
+SUNAT processes daily summaries asynchronously. Use the ticket to check status.
+</Note>
+
+#### Check Summary Status
+
+```bash
+curl -X POST https://api.example.com/api/boletas/summary/10/check-status \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response (Accepted):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 10,
+    "estado_sunat": "ACEPTADO",
+    "cdr_path": "storage/companies/1/summaries/cdr/...",
+    "respuesta_sunat": {
+      "code": "0",
+      "description": "El Resumen diario ha sido aceptado"
+    }
+  },
+  "message": "Estado del resumen consultado correctamente"
+}
+```
+
+## Downloading Documents
+
+### Download XML
+
+```bash
+curl -X GET https://api.example.com/api/boletas/456/download-xml \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o boleta.xml
+```
+
+### Download CDR
+
+```bash
+curl -X GET https://api.example.com/api/boletas/456/download-cdr \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o R-B001-00000456.zip
+```
+
+### Download PDF
+
+```bash
+curl -X GET https://api.example.com/api/boletas/456/download-pdf?format=80mm \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o boleta.pdf
+```
+
+<Note>
+For retail/POS systems, use `80mm` or `ticket` format for thermal printers.
+</Note>
+
+## Querying Boletas
+
+```bash
+curl -X GET "https://api.example.com/api/boletas?company_id=1&branch_id=1&fecha_desde=2024-03-01&fecha_hasta=2024-03-31&estado_sunat=ACEPTADO" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Query Parameters
+
+- `company_id`: Filter by company
+- `branch_id`: Filter by branch
+- `estado_sunat`: Status filter
+- `fecha_desde`: Start date
+- `fecha_hasta`: End date
+- `per_page`: Pagination (default: 15)
+
+## Special Cases
+
+### Generic Client (Cash Sales)
+
+For walk-in customers without document:
+
+```json
+{
+  "client": {
+    "tipo_documento": "0",
+    "numero_documento": "00000000",
+    "razon_social": "CLIENTE VARIOS"
+  }
+}
+```
+
+### Free/Promotional Items
+
+Use tax code `11` for free items:
+
+```json
+{
+  "codigo": "GIFT001",
+  "descripcion": "Regalo promocional",
+  "unidad": "NIU",
+  "cantidad": 1,
+  "mto_valor_unitario": 0.00,
+  "mto_valor_gratuito": 15.00,
+  "porcentaje_igv": 18,
+  "tip_afe_igv": "11"
+}
+```
+
+### Plastic Bag Tax (ICBPER)
+
+```json
+{
+  "codigo": "BOLSA",
+  "descripcion": "Bolsa plástica",
+  "unidad": "NIU",
+  "cantidad": 3,
+  "mto_valor_unitario": 0.00,
+  "factor_icbper": 0.50,
+  "tip_afe_igv": "10"
+}
+```
+
+<Note>
+ICBPER is S/ 0.50 per plastic bag as of 2024. This is calculated separately from IGV.
+</Note>
+
+## Implementation Details
+
+From `app/Http/Controllers/Api/BoletaController.php:59-74` and `app/Services/DocumentService.php:116-178`:
+
+1. Validates company/branch relationship
+2. Creates or retrieves client
+3. Generates correlative number automatically
+4. Calculates totals including ICBPER
+5. Handles free items (tip_afe_igv: 11-16)
+6. Stores with appropriate send method
+
+## Common Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| Invalid send method | Wrong `metodo_envio` | Use `individual` or `resumen_diario` |
+| Summary already sent | Trying to resend accepted summary | Create new summary for new boletas |
+| No pending boletas | No boletas for summary date | Verify date and that boletas aren't already in summary |
+| Ticket not found | Summary not sent yet | Send summary first to get ticket |
+
+## Best Practices
+
+1. **Use individual send** for important sales that need immediate confirmation
+2. **Use daily summary** for high-volume retail to reduce API calls
+3. **Generic client** is acceptable for amounts under S/ 700
+4. **Always include email** for sending electronic copies to customers
+5. **Check summary status** periodically (every 30 minutes) until accepted
+6. **Keep ticket numbers** for troubleshooting
+
+## Next Steps
+
+<Card title="Daily Summary Management" icon="calendar-days" href="#daily-summary-send">
+  Master batch processing with daily summaries
+</Card>
+
+<Card title="Credit Notes" icon="file-invoice" href="/guides/credit-notes">
+  Learn how to create credit notes for boletas
+</Card>

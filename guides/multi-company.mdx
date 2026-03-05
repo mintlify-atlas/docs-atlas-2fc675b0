@@ -1,0 +1,612 @@
+---
+title: 'Multi-Company Management'
+description: 'Set up and manage multiple companies and branches for electronic invoicing'
+---
+
+## Overview
+
+The API supports multi-company and multi-branch architecture, allowing you to manage electronic invoicing for multiple legal entities and their branches from a single integration.
+
+## Architecture
+
+The system uses a hierarchical structure:
+
+```
+API Instance
+└── Company 1 (RUC: 20123456789)
+    ├── Branch 1 (Main Office)
+    │   ├── Invoice Series: F001, F002
+    │   ├── Boleta Series: B001
+    │   └── Credit Note Series: FC01
+    │
+    └── Branch 2 (Store Lima)
+        ├── Boleta Series: B002, B003
+        └── Credit Note Series: BC01
+
+└── Company 2 (RUC: 20987654321)
+    └── Branch 1 (Headquarters)
+        ├── Invoice Series: F001
+        └── Boleta Series: B001
+```
+
+## Creating a Company
+
+### Company Registration
+
+<CodeGroup>
+
+```json Create Company
+{
+  "ruc": "20123456789",
+  "razon_social": "EMPRESA DEMO SAC",
+  "nombre_comercial": "Demo Company",
+  "direccion": "Av. Javier Prado 1234",
+  "ubigeo": "150101",
+  "distrito": "San Isidro",
+  "provincia": "Lima",
+  "departamento": "Lima",
+  "telefono": "01-1234567",
+  "email": "contacto@empresa.com",
+  "web": "https://www.empresa.com",
+  "usuario_sol": "20123456789MODDATOS",
+  "clave_sol": "moddatos",
+  "certificado_password": "password123",
+  "modo_produccion": false,
+  "activo": true
+}
+```
+
+```bash cURL Request
+curl -X POST https://api.example.com/api/companies \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "ruc": "20123456789",
+    "razon_social": "EMPRESA DEMO SAC",
+    "nombre_comercial": "Demo Company",
+    "direccion": "Av. Javier Prado 1234",
+    "ubigeo": "150101",
+    "distrito": "San Isidro",
+    "provincia": "Lima",
+    "departamento": "Lima",
+    "email": "contacto@empresa.com",
+    "usuario_sol": "20123456789MODDATOS",
+    "clave_sol": "moddatos",
+    "modo_produccion": false
+  }'
+```
+
+```json With Certificate Upload
+# Using multipart/form-data
+curl -X POST https://api.example.com/api/companies \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "ruc=20123456789" \
+  -F "razon_social=EMPRESA DEMO SAC" \
+  -F "direccion=Av. Javier Prado 1234" \
+  -F "ubigeo=150101" \
+  -F "distrito=San Isidro" \
+  -F "provincia=Lima" \
+  -F "departamento=Lima" \
+  -F "email=contacto@empresa.com" \
+  -F "usuario_sol=20123456789MODDATOS" \
+  -F "clave_sol=moddatos" \
+  -F "certificado_pem=@/path/to/certificate.pem" \
+  -F "certificado_password=password123" \
+  -F "logo_path=@/path/to/logo.png" \
+  -F "modo_produccion=false"
+```
+
+</CodeGroup>
+
+**Success Response:**
+
+```json
+{
+  "success": true,
+  "message": "Empresa creada exitosamente",
+  "data": {
+    "id": 1,
+    "ruc": "20123456789",
+    "razon_social": "EMPRESA DEMO SAC",
+    "nombre_comercial": "Demo Company",
+    "direccion": "Av. Javier Prado 1234",
+    "ubigeo": "150101",
+    "distrito": "San Isidro",
+    "provincia": "Lima",
+    "departamento": "Lima",
+    "telefono": "01-1234567",
+    "email": "contacto@empresa.com",
+    "web": "https://www.empresa.com",
+    "usuario_sol": "20123456789MODDATOS",
+    "modo_produccion": false,
+    "activo": true,
+    "created_at": "2024-03-15T10:30:00.000000Z"
+  }
+}
+```
+
+## Required Company Fields
+
+<ParamField path="ruc" type="string" required>
+  Company RUC (11 digits, must be unique)
+</ParamField>
+
+<ParamField path="razon_social" type="string" required>
+  Legal business name (as registered with SUNAT)
+</ParamField>
+
+<ParamField path="direccion" type="string" required>
+  Complete legal address
+</ParamField>
+
+<ParamField path="ubigeo" type="string" required>
+  UBIGEO code (6 digits) - Geographic code
+</ParamField>
+
+<ParamField path="distrito" type="string" required>
+  District name
+</ParamField>
+
+<ParamField path="provincia" type="string" required>
+  Province name
+</ParamField>
+
+<ParamField path="departamento" type="string" required>
+  Department name
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  Company email for notifications
+</ParamField>
+
+<ParamField path="usuario_sol" type="string" required>
+  SUNAT SOL username (format: RUC + username)
+</ParamField>
+
+<ParamField path="clave_sol" type="string" required>
+  SUNAT SOL password
+</ParamField>
+
+### Optional Fields
+
+<ParamField path="nombre_comercial" type="string">
+  Commercial/trade name
+</ParamField>
+
+<ParamField path="telefono" type="string">
+  Phone number
+</ParamField>
+
+<ParamField path="web" type="string">
+  Company website URL
+</ParamField>
+
+<ParamField path="certificado_pem" type="file">
+  Digital certificate file (.pem, .crt, .cer)
+</ParamField>
+
+<ParamField path="certificado_password" type="string">
+  Certificate password
+</ParamField>
+
+<ParamField path="logo_path" type="file">
+  Company logo (PNG/JPG, max 2MB)
+</ParamField>
+
+<ParamField path="modo_produccion" type="boolean" default="false">
+  Environment mode:
+  - `false`: Beta/testing environment
+  - `true`: Production environment
+</ParamField>
+
+<ParamField path="activo" type="boolean" default="true">
+  Active status
+</ParamField>
+
+<Warning>
+Start with `modo_produccion: false` to test in SUNAT's beta environment. Switch to production only after thorough testing.
+</Warning>
+
+## Creating Branches
+
+### Branch Registration
+
+<CodeGroup>
+
+```json Create Branch
+{
+  "company_id": 1,
+  "codigo": "0001",
+  "nombre": "Tienda Principal",
+  "direccion": "Av. Javier Prado 1234",
+  "ubigeo": "150101",
+  "distrito": "San Isidro",
+  "provincia": "Lima",
+  "departamento": "Lima",
+  "telefono": "01-1234567",
+  "email": "tienda@empresa.com",
+  "contacto_nombre": "Juan Perez",
+  "series_factura": ["F001", "F002"],
+  "series_boleta": ["B001", "B002"],
+  "series_nota_credito": ["FC01", "BC01"],
+  "series_nota_debito": ["FD01", "BD01"],
+  "series_guia_remision": ["T001"],
+  "activo": true
+}
+```
+
+```bash cURL Request
+curl -X POST https://api.example.com/api/branches \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "company_id": 1,
+    "codigo": "0001",
+    "nombre": "Tienda Principal",
+    "direccion": "Av. Javier Prado 1234",
+    "ubigeo": "150101",
+    "distrito": "San Isidro",
+    "provincia": "Lima",
+    "departamento": "Lima",
+    "email": "tienda@empresa.com",
+    "series_factura": ["F001", "F002"],
+    "series_boleta": ["B001"]
+  }'
+```
+
+</CodeGroup>
+
+**Success Response:**
+
+```json
+{
+  "success": true,
+  "message": "Sucursal creada exitosamente",
+  "data": {
+    "id": 1,
+    "company_id": 1,
+    "codigo": "0001",
+    "nombre": "Tienda Principal",
+    "direccion": "Av. Javier Prado 1234",
+    "ubigeo": "150101",
+    "distrito": "San Isidro",
+    "provincia": "Lima",
+    "departamento": "Lima",
+    "series_factura": ["F001", "F002"],
+    "series_boleta": ["B001", "B002"],
+    "activo": true,
+    "company": {
+      "id": 1,
+      "ruc": "20123456789",
+      "razon_social": "EMPRESA DEMO SAC"
+    }
+  }
+}
+```
+
+## Required Branch Fields
+
+<ParamField path="company_id" type="integer" required>
+  ID of the parent company
+</ParamField>
+
+<ParamField path="codigo" type="string" required>
+  Branch code (max 10 characters, unique per company)
+</ParamField>
+
+<ParamField path="nombre" type="string" required>
+  Branch name
+</ParamField>
+
+<ParamField path="direccion" type="string" required>
+  Branch address
+</ParamField>
+
+<ParamField path="ubigeo" type="string" required>
+  UBIGEO code (6 digits)
+</ParamField>
+
+<ParamField path="distrito" type="string" required>
+  District
+</ParamField>
+
+<ParamField path="provincia" type="string" required>
+  Province
+</ParamField>
+
+<ParamField path="departamento" type="string" required>
+  Department
+</ParamField>
+
+## Series Configuration
+
+Each branch can have multiple series for different document types:
+
+<ParamField path="series_factura" type="array">
+  Invoice series (e.g., ["F001", "F002"])
+  - Must start with 'F' for facturas
+  - 4 characters max
+</ParamField>
+
+<ParamField path="series_boleta" type="array">
+  Boleta series (e.g., ["B001", "B002"])
+  - Must start with 'B' for boletas
+  - 4 characters max
+</ParamField>
+
+<ParamField path="series_nota_credito" type="array">
+  Credit note series (e.g., ["FC01", "BC01"])
+  - FC for invoice credit notes
+  - BC for boleta credit notes
+</ParamField>
+
+<ParamField path="series_nota_debito" type="array">
+  Debit note series (e.g., ["FD01", "BD01"])
+  - FD for invoice debit notes
+  - BD for boleta debit notes
+</ParamField>
+
+<ParamField path="series_guia_remision" type="array">
+  Dispatch guide series (e.g., ["T001"])
+  - T for transport guides
+</ParamField>
+
+<Note>
+Series must be registered with SUNAT before use. Each series maintains its own correlative number sequence.
+</Note>
+
+## Querying Companies
+
+### List All Companies
+
+```bash
+curl -X GET https://api.example.com/api/companies \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "ruc": "20123456789",
+      "razon_social": "EMPRESA DEMO SAC",
+      "modo_produccion": false,
+      "activo": true,
+      "branches": [
+        {
+          "id": 1,
+          "nombre": "Tienda Principal"
+        },
+        {
+          "id": 2,
+          "nombre": "Tienda Lima"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "total": 1,
+    "active_count": 1,
+    "production_count": 0
+  }
+}
+```
+
+### Get Company Details
+
+```bash
+curl -X GET https://api.example.com/api/companies/1 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Get Company Branches
+
+```bash
+curl -X GET https://api.example.com/api/companies/1/branches \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "codigo": "0001",
+      "nombre": "Tienda Principal",
+      "activo": true
+    },
+    {
+      "id": 2,
+      "codigo": "0002",
+      "nombre": "Tienda Lima",
+      "activo": true
+    }
+  ],
+  "meta": {
+    "company_id": 1,
+    "company_name": "EMPRESA DEMO SAC",
+    "total_branches": 2,
+    "active_branches": 2
+  }
+}
+```
+
+## Updating Companies
+
+```bash
+curl -X PUT https://api.example.com/api/companies/1 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "razon_social": "EMPRESA DEMO SAC UPDATED",
+    "email": "new-email@empresa.com",
+    "telefono": "01-9876543"
+  }'
+```
+
+<Warning>
+Cannot change RUC after company creation. Create a new company if RUC needs to change.
+</Warning>
+
+## Switching Environments
+
+### Toggle Production Mode
+
+```bash
+curl -X POST https://api.example.com/api/companies/1/toggle-production \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "modo_produccion": true
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Modo de producción actualizado exitosamente",
+  "data": {
+    "company_id": 1,
+    "modo_anterior": "beta",
+    "modo_actual": "produccion"
+  }
+}
+```
+
+<Warning>
+**Before switching to production:**
+1. Test all document types in beta environment
+2. Verify SUNAT credentials work correctly
+3. Ensure certificate is valid for production
+4. Confirm all series are registered with SUNAT
+</Warning>
+
+## Activating/Deactivating
+
+### Deactivate Company
+
+```bash
+curl -X DELETE https://api.example.com/api/companies/1 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+This performs a soft delete (sets `activo: false`).
+
+### Reactivate Company
+
+```bash
+curl -X POST https://api.example.com/api/companies/1/activate \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Correlative Numbers
+
+Each branch + series combination maintains independent correlative numbers:
+
+```
+Company 1
+  Branch 1
+    F001: 1, 2, 3, 4, ...
+    F002: 1, 2, 3, ...
+    B001: 1, 2, 3, ...
+  Branch 2
+    F001: 1, 2, 3, ...  (independent from Branch 1 F001)
+    B001: 1, 2, 3, ...
+```
+
+The system automatically generates the next correlative when creating documents.
+
+## Multi-Company Usage Example
+
+### Scenario: Accounting Firm
+
+An accounting firm manages invoicing for 3 clients:
+
+```bash
+# Create Company 1
+curl -X POST https://api.example.com/api/companies \
+  -d '{"ruc": "20111111111", "razon_social": "CLIENT A SAC", ...}'
+
+# Create Company 2
+curl -X POST https://api.example.com/api/companies \
+  -d '{"ruc": "20222222222", "razon_social": "CLIENT B SAC", ...}'
+
+# Create Company 3
+curl -X POST https://api.example.com/api/companies \
+  -d '{"ruc": "20333333333", "razon_social": "CLIENT C SAC", ...}'
+
+# Create branch for Client A
+curl -X POST https://api.example.com/api/branches \
+  -d '{"company_id": 1, "nombre": "Main Office", ...}'
+
+# Issue invoice for Client A
+curl -X POST https://api.example.com/api/invoices \
+  -d '{"company_id": 1, "branch_id": 1, ...}'
+```
+
+## Implementation Details
+
+From `app/Http/Controllers/Api/CompanyController.php` and `BranchController.php`:
+
+### Company Creation (Line 54-68)
+1. Validates RUC uniqueness
+2. Processes boolean fields
+3. Stores certificate file if provided
+4. Stores logo file if provided
+5. Creates company record
+6. Returns company with configurations
+
+### Branch Creation (Line 56-98)
+1. Validates company exists and is active
+2. Validates branch code unique per company
+3. Creates branch with series configuration
+4. Returns branch with company relationship
+
+### Validation Rules
+
+From `app/Http/Requests/Company/StoreCompanyRequest.php`:
+- RUC: Exactly 11 digits, unique
+- UBIGEO: Exactly 6 digits
+- Email: Valid email format
+- Certificate: .pem, .crt, .cer, .txt (max 2MB)
+- Logo: PNG/JPG (max 2MB)
+
+## Best Practices
+
+1. **Use descriptive branch codes**: "0001", "LIMA", "CUSCO"
+2. **Configure series upfront**: Set all series when creating branch
+3. **Test in beta first**: Always test with `modo_produccion: false`
+4. **One company per RUC**: Don't duplicate companies
+5. **Logical branch structure**: Match physical locations
+6. **Keep credentials secure**: Store SOL credentials encrypted
+7. **Upload company logos**: Better PDF presentation
+8. **Use consistent naming**: Standard naming for branches/series
+
+## Common Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| RUC already exists | Duplicate company | Use existing company or different RUC |
+| Branch code exists | Duplicate code in company | Use unique code per company |
+| Company not active | Deactivated company | Activate company first |
+| Invalid UBIGEO | Wrong format | Use valid 6-digit UBIGEO |
+| Branch belongs to different company | Wrong company_id | Verify company_id matches |
+
+## Next Steps
+
+<Card title="Creating Invoices" icon="file-invoice" href="/guides/creating-invoices">
+  Start creating invoices for your companies
+</Card>
+
+<Card title="PDF Generation" icon="file-pdf" href="/guides/pdf-generation">
+  Generate branded PDFs with company logos
+</Card>

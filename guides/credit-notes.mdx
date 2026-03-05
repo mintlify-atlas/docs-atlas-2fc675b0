@@ -1,0 +1,545 @@
+---
+title: 'Creating Credit Notes'
+description: 'Complete guide to creating electronic credit notes (Notas de Crédito) for document corrections'
+---
+
+## Overview
+
+Credit Notes (Notas de Crédito) are used to correct or cancel previously issued invoices or boletas. They reduce the total amount owed by the client.
+
+## Prerequisites
+
+- An existing invoice or boleta to correct
+- Configured company and branch
+- Valid reason code for the credit note
+
+## Reason Codes
+
+SUNAT defines specific codes for credit note reasons:
+
+| Code | Description | Use Case |
+|------|-------------|----------|
+| `01` | Cancellation of operation | Full cancellation |
+| `02` | Cancellation due to error in RUC | Wrong client RUC |
+| `03` | Correction due to error in description | Wrong product description |
+| `04` | Global discount | Volume discount |
+| `05` | Discount per item | Item-level discount |
+| `06` | Total return | Full product return |
+| `07` | Partial return | Partial product return |
+| `08` | Bonus | Promotional bonus |
+| `09` | Price decrease | Price adjustment |
+| `10` | Other concept | Other valid reasons |
+| `11` | Transfer adjustments | |
+| `12` | Expenses incurred for free sales | |
+| `13` | Free bonuses | |
+
+## Creating a Credit Note
+
+### Full Cancellation
+
+<CodeGroup>
+
+```json Full Cancellation (Code 01)
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "FC01",
+  "fecha_emision": "2024-03-15",
+  "moneda": "PEN",
+  "tipo_doc_afectado": "01",
+  "num_doc_afectado": "F001-00000123",
+  "cod_motivo": "01",
+  "des_motivo": "Anulación de la operación",
+  "forma_pago_tipo": "Contado",
+  "client": {
+    "tipo_documento": "6",
+    "numero_documento": "20123456789",
+    "razon_social": "EMPRESA CLIENTE SAC",
+    "direccion": "Av. Los Alamos 123",
+    "email": "cliente@empresa.com"
+  },
+  "detalles": [
+    {
+      "codigo": "PROD001",
+      "descripcion": "Laptop HP ProBook 450 G8",
+      "unidad": "NIU",
+      "cantidad": 2,
+      "mto_valor_unitario": 2500.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    },
+    {
+      "codigo": "SERV001",
+      "descripcion": "Instalación y configuración",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 500.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+```json Partial Return (Code 07)
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "FC01",
+  "fecha_emision": "2024-03-15",
+  "moneda": "PEN",
+  "tipo_doc_afectado": "01",
+  "num_doc_afectado": "F001-00000123",
+  "cod_motivo": "07",
+  "des_motivo": "Devolución parcial - 1 equipo defectuoso",
+  "client": {
+    "tipo_documento": "6",
+    "numero_documento": "20123456789",
+    "razon_social": "EMPRESA CLIENTE SAC"
+  },
+  "detalles": [
+    {
+      "codigo": "PROD001",
+      "descripcion": "Laptop HP ProBook 450 G8",
+      "unidad": "NIU",
+      "cantidad": 1,
+      "mto_valor_unitario": 2500.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+```json Price Discount (Code 09)
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "FC01",
+  "fecha_emision": "2024-03-15",
+  "moneda": "PEN",
+  "tipo_doc_afectado": "01",
+  "num_doc_afectado": "F001-00000100",
+  "cod_motivo": "09",
+  "des_motivo": "Descuento por volumen de compra",
+  "client": {
+    "tipo_documento": "6",
+    "numero_documento": "20987654321",
+    "razon_social": "DISTRIBUIDORA LIMA SAC"
+  },
+  "detalles": [
+    {
+      "codigo": "DESC",
+      "descripcion": "Descuento por volumen",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 500.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+```json Boleta Credit Note
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "BC01",
+  "fecha_emision": "2024-03-15",
+  "moneda": "PEN",
+  "tipo_doc_afectado": "03",
+  "num_doc_afectado": "B001-00000456",
+  "cod_motivo": "06",
+  "des_motivo": "Devolución total del producto",
+  "client": {
+    "tipo_documento": "1",
+    "numero_documento": "12345678",
+    "razon_social": "JUAN PEREZ GOMEZ"
+  },
+  "detalles": [
+    {
+      "codigo": "PROD002",
+      "descripcion": "Teclado USB básico",
+      "unidad": "NIU",
+      "cantidad": 1,
+      "mto_valor_unitario": 33.90,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+```bash cURL Request
+curl -X POST https://api.example.com/api/credit-notes \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "company_id": 1,
+    "branch_id": 1,
+    "serie": "FC01",
+    "fecha_emision": "2024-03-15",
+    "moneda": "PEN",
+    "tipo_doc_afectado": "01",
+    "num_doc_afectado": "F001-00000123",
+    "cod_motivo": "01",
+    "des_motivo": "Anulación de la operación",
+    "client": {
+      "tipo_documento": "6",
+      "numero_documento": "20123456789",
+      "razon_social": "EMPRESA CLIENTE SAC"
+    },
+    "detalles": [{
+      "codigo": "PROD001",
+      "descripcion": "Producto devuelto",
+      "unidad": "NIU",
+      "cantidad": 1,
+      "mto_valor_unitario": 100.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }]
+  }'
+```
+
+</CodeGroup>
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 50,
+    "company_id": 1,
+    "branch_id": 1,
+    "tipo_documento": "07",
+    "serie": "FC01",
+    "correlativo": "00000050",
+    "numero_completo": "FC01-00000050",
+    "tipo_doc_afectado": "01",
+    "num_doc_afectado": "F001-00000123",
+    "cod_motivo": "01",
+    "des_motivo": "Anulación de la operación",
+    "fecha_emision": "2024-03-15",
+    "moneda": "PEN",
+    "mto_oper_gravadas": 5000.00,
+    "mto_igv": 900.00,
+    "mto_imp_venta": 5900.00,
+    "estado_sunat": "PENDIENTE"
+  },
+  "message": "Nota de crédito creada correctamente"
+}
+```
+
+## Required Fields
+
+<ParamField path="company_id" type="integer" required>
+  Company ID issuing the credit note
+</ParamField>
+
+<ParamField path="branch_id" type="integer" required>
+  Branch ID (must belong to company)
+</ParamField>
+
+<ParamField path="serie" type="string" required>
+  Credit note series (max 4 characters)
+  - Invoices: "FC01", "FC02", etc.
+  - Boletas: "BC01", "BC02", etc.
+</ParamField>
+
+<ParamField path="fecha_emision" type="date" required>
+  Issue date (YYYY-MM-DD)
+</ParamField>
+
+<ParamField path="tipo_doc_afectado" type="string" required>
+  Affected document type:
+  - `01`: Invoice (Factura)
+  - `03`: Boleta
+  - `07`: Credit Note
+  - `08`: Debit Note
+</ParamField>
+
+<ParamField path="num_doc_afectado" type="string" required>
+  Complete number of affected document (e.g., "F001-00000123")
+</ParamField>
+
+<ParamField path="cod_motivo" type="string" required>
+  Reason code (01-13, see table above)
+</ParamField>
+
+<ParamField path="des_motivo" type="string" required>
+  Reason description (max 250 characters)
+</ParamField>
+
+<ParamField path="moneda" type="string" required>
+  Currency: `PEN` or `USD`
+</ParamField>
+
+<Warning>
+The credit note must reference an existing, SUNAT-accepted document. The client information must match the original document.
+</Warning>
+
+## Details Array
+
+The details array should match or be a subset of the original document:
+
+<ParamField path="detalles[].codigo" type="string" required>
+  Product/service code (should match original)
+</ParamField>
+
+<ParamField path="detalles[].descripcion" type="string" required>
+  Item description
+</ParamField>
+
+<ParamField path="detalles[].unidad" type="string" required>
+  Unit of measure
+</ParamField>
+
+<ParamField path="detalles[].cantidad" type="number" required>
+  Quantity to credit (must be ≤ original quantity)
+</ParamField>
+
+<ParamField path="detalles[].mto_valor_unitario" type="number" required>
+  Unit value (should match original)
+</ParamField>
+
+<ParamField path="detalles[].tip_afe_igv" type="string" required>
+  Tax affectation (should match original)
+</ParamField>
+
+## Sending to SUNAT
+
+Credit notes are sent the same way as invoices:
+
+```bash
+curl -X POST https://api.example.com/api/credit-notes/50/send-sunat \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 50,
+    "numero_completo": "FC01-00000050",
+    "estado_sunat": "ACEPTADO",
+    "xml_path": "storage/companies/1/credit-notes/xml/...",
+    "cdr_path": "storage/companies/1/credit-notes/cdr/...",
+    "respuesta_sunat": {
+      "code": "0",
+      "description": "La Nota de Credito ha sido aceptada"
+    }
+  },
+  "message": "Nota de crédito enviada correctamente a SUNAT"
+}
+```
+
+## Advanced Features
+
+### Credit with Payment Terms
+
+If the original was on credit, you can specify payment terms:
+
+```json
+{
+  "forma_pago_tipo": "Credito",
+  "forma_pago_cuotas": [
+    {
+      "monto": 2950.00,
+      "fecha_pago": "2024-04-15"
+    },
+    {
+      "monto": 2950.00,
+      "fecha_pago": "2024-05-15"
+    }
+  ]
+}
+```
+
+### Related Documents
+
+Link the credit note to related guides or other documents:
+
+```json
+{
+  "guias": [
+    {
+      "tipo_doc": "09",
+      "nro_doc": "T001-00000789"
+    }
+  ]
+}
+```
+
+### Custom Legends
+
+```json
+{
+  "leyendas": [
+    {
+      "code": "1000",
+      "value": "CINCO MIL NOVECIENTOS CON 00/100 SOLES"
+    },
+    {
+      "code": "2000",
+      "value": "Nota informativa adicional"
+    }
+  ]
+}
+```
+
+<Note>
+The API automatically generates the standard amount legend (code 1000) if not provided.
+</Note>
+
+## Downloading Documents
+
+### Download XML
+
+```bash
+curl -X GET https://api.example.com/api/credit-notes/50/download-xml \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o credit-note.xml
+```
+
+### Download CDR
+
+```bash
+curl -X GET https://api.example.com/api/credit-notes/50/download-cdr \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o R-FC01-00000050.zip
+```
+
+### Download PDF
+
+```bash
+curl -X GET https://api.example.com/api/credit-notes/50/download-pdf?format=A4 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o credit-note.pdf
+```
+
+## Querying Credit Notes
+
+```bash
+curl -X GET "https://api.example.com/api/credit-notes?company_id=1&fecha_desde=2024-03-01&fecha_hasta=2024-03-31" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Query Parameters
+
+- `company_id`: Filter by company
+- `branch_id`: Filter by branch
+- `estado_sunat`: Filter by status
+- `fecha_desde`: Start date
+- `fecha_hasta`: End date
+- `per_page`: Items per page
+
+## Implementation Details
+
+From `app/Services/DocumentService.php:880-998`, the credit note creation:
+
+1. Validates company/branch relationship
+2. Creates or retrieves client
+3. Generates automatic correlative for series
+4. Processes details and calculates totals
+5. Validates tax affectation types
+6. Generates automatic legends
+7. Stores with status `PENDIENTE`
+
+### Automatic Calculations
+
+The API automatically calculates:
+- Line item totals (quantity × unit value)
+- IGV per item
+- Subtotals by tax type (gravadas, exoneradas, inafectas)
+- Total IGV
+- Total amount
+
+## Common Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| Referenced document not found | `num_doc_afectado` doesn't exist | Verify document number exists |
+| Client mismatch | Different client than original | Use same client as original document |
+| Invalid reason code | Wrong `cod_motivo` | Use valid code from 01-13 |
+| Amount exceeds original | Credit exceeds original amount | Verify quantities and unit values |
+| Document not accepted | Original not accepted by SUNAT | Original must be ACEPTADO first |
+
+## Best Practices
+
+1. **Always reference the complete document number** including series (e.g., "F001-00000123")
+2. **Use descriptive reason descriptions** for audit trails
+3. **Match client data exactly** from the original document
+4. **Verify original document is accepted** before creating credit note
+5. **Keep item codes consistent** with original document for tracking
+6. **Document business reason** in `des_motivo` field clearly
+
+## Special Cases
+
+### Correcting RUC Error
+
+For code `02` (error in RUC):
+
+```json
+{
+  "cod_motivo": "02",
+  "des_motivo": "Corrección por error en RUC - Se emitirá nuevo comprobante",
+  "client": {
+    "tipo_documento": "6",
+    "numero_documento": "20123456789",
+    "razon_social": "CLIENTE CORRECTO SAC"
+  }
+}
+```
+
+<Warning>
+After sending this credit note, issue a new invoice with the correct client information.
+</Warning>
+
+### Global Discount
+
+For code `04` (global discount):
+
+```json
+{
+  "cod_motivo": "04",
+  "des_motivo": "Descuento global por pronto pago",
+  "detalles": [
+    {
+      "codigo": "DESC-GLOBAL",
+      "descripcion": "Descuento por pronto pago 10%",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 590.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+## Validation Rules
+
+<Warning>
+These validations are enforced by `app/Http/Requests/StoreCreditNoteRequest.php`:
+</Warning>
+
+- Serie is required and max 4 characters
+- `tipo_doc_afectado` must be: 01, 03, 07, or 08
+- `cod_motivo` must be: 01-13
+- Client document type must be: 0, 1, 4, or 6
+- Details array must have at least 1 item
+- All monetary values must be ≥ 0
+
+## Next Steps
+
+<Card title="Debit Notes" icon="file-invoice" href="/guides/debit-notes">
+  Learn how to create debit notes for amount increases
+</Card>
+
+<Card title="PDF Generation" icon="file-pdf" href="/guides/pdf-generation">
+  Customize credit note PDF templates
+</Card>

@@ -1,0 +1,343 @@
+---
+title: Send to SUNAT
+api: POST /api/v1/invoices/{id}/send-sunat
+---
+
+Sends an invoice or boleta to SUNAT for validation. This endpoint generates the XML file, signs it digitally, and submits it to SUNAT's web service.
+
+<Note>
+This endpoint works for both invoices (facturas) and boletas. Use `/api/v1/invoices/{id}/send-sunat` for invoices and `/api/v1/boletas/{id}/send-sunat` for boletas.
+</Note>
+
+## Authentication
+
+This endpoint requires authentication using a Bearer token (Sanctum).
+
+```bash
+Authorization: Bearer YOUR_API_TOKEN
+```
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The ID of the invoice or boleta to send to SUNAT.
+</ParamField>
+
+## Request Body
+
+This endpoint does not require a request body. All information is taken from the existing invoice/boleta record.
+
+## Response
+
+### Success Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the document was successfully sent and accepted by SUNAT.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The updated document with SUNAT response information.
+  
+  <Expandable title="Document object">
+    <ResponseField name="id" type="integer">
+      Document ID.
+    </ResponseField>
+    
+    <ResponseField name="numero_completo" type="string">
+      Full document number (serie-numero).
+    </ResponseField>
+    
+    <ResponseField name="estado_sunat" type="string">
+      SUNAT status:
+      - `ACEPTADO`: Accepted by SUNAT
+      - `RECHAZADO`: Rejected by SUNAT
+      - `PENDIENTE`: Still pending
+    </ResponseField>
+    
+    <ResponseField name="sunat_response" type="string">
+      SUNAT response message.
+    </ResponseField>
+    
+    <ResponseField name="sunat_code" type="string">
+      SUNAT response code.
+    </ResponseField>
+    
+    <ResponseField name="xml_path" type="string">
+      Path to the generated XML file.
+    </ResponseField>
+    
+    <ResponseField name="cdr_path" type="string">
+      Path to the CDR (Constancia de Recepción) file received from SUNAT.
+    </ResponseField>
+    
+    <ResponseField name="hash" type="string">
+      Digital signature hash of the XML.
+    </ResponseField>
+    
+    <ResponseField name="company" type="object">
+      Company information with relationships.
+    </ResponseField>
+    
+    <ResponseField name="branch" type="object">
+      Branch information with relationships.
+    </ResponseField>
+    
+    <ResponseField name="client" type="object">
+      Client information with relationships.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Success message describing the operation result.
+</ResponseField>
+
+### Error Response
+
+<ResponseField name="success" type="boolean">
+  Always `false` for error responses.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The document object with error details.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message from SUNAT or system.
+</ResponseField>
+
+<ResponseField name="error_code" type="string">
+  SUNAT error code or "UNKNOWN" for system errors.
+</ResponseField>
+
+## Request Examples
+
+<CodeGroup>
+
+```bash cURL - Invoice
+curl -X POST https://api.example.com/api/v1/invoices/123/send-sunat \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+```bash cURL - Boleta
+curl -X POST https://api.example.com/api/v1/boletas/456/send-sunat \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+```javascript JavaScript
+// Send invoice
+const response = await fetch('https://api.example.com/api/v1/invoices/123/send-sunat', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN',
+    'Content-Type': 'application/json'
+  }
+});
+
+const data = await response.json();
+
+// Send boleta
+const boletaResponse = await fetch('https://api.example.com/api/v1/boletas/456/send-sunat', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN',
+    'Content-Type': 'application/json'
+  }
+});
+
+const boletaData = await boletaResponse.json();
+```
+
+```php PHP
+$client = new GuzzleHttp\Client();
+
+// Send invoice
+$response = $client->post('https://api.example.com/api/v1/invoices/123/send-sunat', [
+    'headers' => [
+        'Authorization' => 'Bearer YOUR_API_TOKEN',
+        'Content-Type' => 'application/json',
+    ]
+]);
+
+$data = json_decode($response->getBody(), true);
+
+// Send boleta
+$boletaResponse = $client->post('https://api.example.com/api/v1/boletas/456/send-sunat', [
+    'headers' => [
+        'Authorization' => 'Bearer YOUR_API_TOKEN',
+        'Content-Type' => 'application/json',
+    ]
+]);
+
+$boletaData = json_decode($boletaResponse->getBody(), true);
+```
+
+```python Python
+import requests
+
+# Send invoice
+response = requests.post(
+    'https://api.example.com/api/v1/invoices/123/send-sunat',
+    headers={
+        'Authorization': 'Bearer YOUR_API_TOKEN',
+        'Content-Type': 'application/json'
+    }
+)
+
+data = response.json()
+
+# Send boleta
+boleta_response = requests.post(
+    'https://api.example.com/api/v1/boletas/456/send-sunat',
+    headers={
+        'Authorization': 'Bearer YOUR_API_TOKEN',
+        'Content-Type': 'application/json'
+    }
+)
+
+boleta_data = boleta_response.json()
+```
+
+</CodeGroup>
+
+## Response Examples
+
+<CodeGroup>
+
+```json Success (200)
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "company_id": 1,
+    "branch_id": 1,
+    "serie": "F001",
+    "numero": 456,
+    "numero_completo": "F001-456",
+    "fecha_emision": "2024-03-15",
+    "estado_sunat": "ACEPTADO",
+    "sunat_response": "La Factura numero F001-456, ha sido aceptada",
+    "sunat_code": "0",
+    "xml_path": "storage/sunat/company_1/invoices/20240315/20987654321-01-F001-456.xml",
+    "cdr_path": "storage/sunat/company_1/invoices/20240315/R-20987654321-01-F001-456.zip",
+    "hash": "Xj3kL9mP2qR5vW8zA1bC4dE7fG0hI",
+    "enviado_sunat": true,
+    "fecha_envio_sunat": "2024-03-15T10:35:22.000000Z",
+    "company": {
+      "id": 1,
+      "ruc": "20987654321",
+      "razon_social": "MI EMPRESA SAC"
+    },
+    "branch": {
+      "id": 1,
+      "nombre": "Sede Principal"
+    },
+    "client": {
+      "id": 45,
+      "tipo_documento": "6",
+      "numero_documento": "20123456789",
+      "razon_social": "EMPRESA DEMO SAC"
+    }
+  },
+  "message": "Factura enviada correctamente a SUNAT"
+}
+```
+
+```json Already Sent (400)
+{
+  "success": false,
+  "message": "La factura ya fue enviada y aceptada por SUNAT"
+}
+```
+
+```json SUNAT Rejection (400)
+{
+  "success": false,
+  "data": {
+    "id": 123,
+    "numero_completo": "F001-456",
+    "estado_sunat": "RECHAZADO",
+    "sunat_response": "El número de RUC del emisor no está activo en el padrón",
+    "sunat_code": "2335"
+  },
+  "message": "Error al enviar a SUNAT: El número de RUC del emisor no está activo en el padrón",
+  "error_code": "2335"
+}
+```
+
+```json Document Not Found (404)
+{
+  "success": false,
+  "message": "Factura no encontrada",
+  "error": "No query results for model [App\\Models\\Invoice] 999"
+}
+```
+
+```json System Error (500)
+{
+  "success": false,
+  "message": "Error al procesar el envío a SUNAT",
+  "error": "Connection timeout to SUNAT web service"
+}
+```
+
+</CodeGroup>
+
+## Process Flow
+
+When you call this endpoint, the following process occurs:
+
+1. **Validation**: Checks if the document exists and hasn't been accepted by SUNAT already
+2. **XML Generation**: Creates the UBL 2.1 XML file according to SUNAT specifications
+3. **Digital Signature**: Signs the XML with the company's digital certificate
+4. **Compression**: Compresses the signed XML into a ZIP file
+5. **SUNAT Submission**: Sends the ZIP to SUNAT's web service (OSE or SUNAT)
+6. **CDR Reception**: Receives and stores the CDR (Constancia de Recepción)
+7. **Status Update**: Updates the document status based on SUNAT's response
+
+## SUNAT Status Codes
+
+The document's `estado_sunat` field will be updated based on the response:
+
+- **ACEPTADO**: SUNAT accepted the document (code 0 or 0001-0099)
+- **RECHAZADO**: SUNAT rejected the document (code 2000-4999)
+- **PENDIENTE**: Document hasn't been sent or submission failed
+
+## Common SUNAT Error Codes
+
+<Warning>
+If SUNAT rejects the document, review the `error_code` and `sunat_response` to understand the issue:
+
+- **2335**: RUC not active in the registry
+- **2324**: Duplicate document number
+- **2800**: Certificate expired or invalid
+- **2801**: Certificate not found
+- **3032**: Document date outside allowed range
+- **4033**: Digital signature validation failed
+</Warning>
+
+## Environment Configuration
+
+The endpoint uses the company's configuration to determine:
+
+- **Production vs Testing**: Sends to SUNAT production or beta environment
+- **OSE Provider**: Uses configured OSE (Operador de Servicios Electrónicos) or SUNAT directly
+- **Certificates**: Uses the company's digital certificate for signing
+
+## Important Notes
+
+<Note>
+- Once a document is **ACEPTADO** by SUNAT, it cannot be sent again
+- Documents must be sent on the same day they are issued (SUNAT requirement)
+- The XML and CDR files are automatically stored in the configured storage path
+- For boletas sent via daily summary, use the daily summary endpoints instead
+</Note>
+
+## Related Endpoints
+
+- [Create Invoice](/api/documents/create-invoice)
+- [Create Boleta](/api/documents/create-boleta)
+- [Download XML](/api/documents/download-xml)
+- [Download CDR](/api/documents/download-cdr)

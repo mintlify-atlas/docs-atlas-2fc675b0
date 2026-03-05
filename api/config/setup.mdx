@@ -1,0 +1,629 @@
+---
+title: 'System Setup'
+api: 'POST /api/setup/migrate'
+description: 'Initialize and configure the electronic invoicing system'
+---
+
+## Overview
+
+The Setup API provides endpoints for initializing and configuring the SUNAT electronic invoicing system. These endpoints handle database migrations, seed data, system configuration, and company setup.
+
+<Warning>
+  Setup endpoints should only be used during initial system installation or when performing major system updates. Some endpoints are public (no authentication required) while others require authentication.
+</Warning>
+
+---
+
+## System Status
+
+<api method="GET" endpoint="/api/setup/status" />
+
+Checks the current status of the system and setup progress.
+
+<Note>
+  This endpoint does not require authentication and can be used to verify system readiness before login.
+</Note>
+
+### Response
+
+<ResponseField name="system_status" type="object">
+  <ResponseField name="database_connected" type="boolean">
+    Whether database connection is successful
+  </ResponseField>
+  <ResponseField name="migrations_pending" type="boolean">
+    Whether there are pending database migrations
+  </ResponseField>
+  <ResponseField name="seeders_executed" type="boolean">
+    Whether ubigeo data has been seeded
+  </ResponseField>
+  <ResponseField name="companies_count" type="integer">
+    Number of companies configured
+  </ResponseField>
+  <ResponseField name="users_count" type="integer">
+    Number of users in the system
+  </ResponseField>
+  <ResponseField name="storage_writable" type="boolean">
+    Whether storage directory is writable
+  </ResponseField>
+  <ResponseField name="certificates_directory" type="object">
+    Status of certificate and logo directories
+    <ResponseField name="certificado_directory" type="boolean">
+      Certificate directory exists
+    </ResponseField>
+    <ResponseField name="logo_directory" type="boolean">
+      Logo directory exists
+    </ResponseField>
+    <ResponseField name="certificado_file_exists" type="boolean">
+      Certificate file exists
+    </ResponseField>
+    <ResponseField name="storage_link_exists" type="boolean">
+      Storage symbolic link exists
+    </ResponseField>
+  </ResponseField>
+  <ResponseField name="app_environment" type="string">
+    Application environment (local, production, etc.)
+  </ResponseField>
+  <ResponseField name="company_environment" type="string">
+    Company SUNAT environment (beta or produccion)
+  </ResponseField>
+  <ResponseField name="debug" type="boolean">
+    Debug mode enabled
+  </ResponseField>
+  <ResponseField name="app_key_set" type="boolean">
+    Application key is configured
+  </ResponseField>
+  <ResponseField name="certificate_exists" type="boolean">
+    Company certificate exists
+  </ResponseField>
+  <ResponseField name="logo_exists" type="boolean">
+    Company logo exists
+  </ResponseField>
+  <ResponseField name="setup_progress" type="object">
+    Step-by-step setup progress
+    <ResponseField name="step_1_migrations" type="boolean">
+      Migrations completed
+    </ResponseField>
+    <ResponseField name="step_2_seeders" type="boolean">
+      Seeders executed
+    </ResponseField>
+    <ResponseField name="step_3_company" type="boolean">
+      Company configured
+    </ResponseField>
+    <ResponseField name="step_4_ready" type="boolean">
+      System ready for use
+    </ResponseField>
+  </ResponseField>
+  <ResponseField name="ready_for_use" type="boolean">
+    Overall system readiness status
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/api/setup/status" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "system_status": {
+    "database_connected": true,
+    "migrations_pending": false,
+    "seeders_executed": true,
+    "companies_count": 1,
+    "users_count": 2,
+    "storage_writable": true,
+    "certificates_directory": {
+      "certificado_directory": true,
+      "logo_directory": true,
+      "certificado_file_exists": true,
+      "storage_link_exists": true
+    },
+    "app_environment": "production",
+    "company_environment": "beta",
+    "debug": false,
+    "app_key_set": true,
+    "certificate_exists": true,
+    "logo_exists": true,
+    "setup_progress": {
+      "step_1_migrations": true,
+      "step_2_seeders": true,
+      "step_3_company": true,
+      "step_4_ready": true
+    },
+    "ready_for_use": true
+  }
+}
+```
+
+---
+
+## Run Migrations
+
+<api method="POST" endpoint="/api/setup/migrate" />
+
+Executes pending database migrations to create or update database schema.
+
+<Note>
+  This endpoint does not require authentication. It should be run before any other setup operations.
+</Note>
+
+### Example Request
+
+```bash
+curl -X POST "https://api.example.com/api/setup/migrate" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "message": "Migraciones ejecutadas exitosamente",
+  "output": "Migrating: 2024_01_01_000000_create_companies_table\nMigrated:  2024_01_01_000000_create_companies_table (50.45ms)\nMigrating: 2024_01_01_000001_create_branches_table\nMigrated:  2024_01_01_000001_create_branches_table (42.33ms)\n..."
+}
+```
+
+---
+
+## Run Seeders
+
+<api method="POST" endpoint="/api/setup/seed" />
+
+Executes database seeders to populate initial data (primarily ubigeo geographic codes).
+
+<Note>
+  This endpoint does not require authentication. Run migrations before running seeders.
+</Note>
+
+### Request Body
+
+<ParamField body="class" type="string" default="DatabaseSeeder">
+  Specific seeder class to run. Defaults to DatabaseSeeder which runs all seeders.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://api.example.com/api/setup/seed" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "class": "DatabaseSeeder"
+  }'
+```
+
+### Example Response
+
+```json
+{
+  "message": "Seeder 'DatabaseSeeder' ejecutado exitosamente",
+  "output": "Seeding: UbigeoSeeder\nSeeded:  UbigeoSeeder (1.2s)\n",
+  "seeder_class": "DatabaseSeeder"
+}
+```
+
+---
+
+## Complete Setup
+
+<api method="POST" endpoint="/api/v1/setup/complete" />
+
+Completes the full system setup by creating the first company, branch, and configuring SUNAT integration.
+
+<Warning>
+  This endpoint requires authentication. Ensure you have run migrations and seeders first, and have created a user account.
+</Warning>
+
+### Request Body
+
+<ParamField body="environment" type="string" required>
+  SUNAT environment. Valid values: `beta` (testing) or `produccion` (production)
+</ParamField>
+
+<ParamField body="company" type="object" required>
+  Company information
+  <ParamField body="ruc" type="string" required>
+    Company RUC number (11 digits)
+  </ParamField>
+  <ParamField body="razon_social" type="string" required>
+    Company legal name (max 255 characters)
+  </ParamField>
+  <ParamField body="nombre_comercial" type="string">
+    Commercial/trade name (max 255 characters)
+  </ParamField>
+  <ParamField body="direccion" type="string" required>
+    Company address (max 255 characters)
+  </ParamField>
+  <ParamField body="ubigeo" type="string" required>
+    6-digit ubigeo code for company location
+  </ParamField>
+  <ParamField body="distrito" type="string" required>
+    District name (max 255 characters)
+  </ParamField>
+  <ParamField body="provincia" type="string" required>
+    Province name (max 255 characters)
+  </ParamField>
+  <ParamField body="departamento" type="string" required>
+    Department/region name (max 255 characters)
+  </ParamField>
+  <ParamField body="telefono" type="string">
+    Phone number (max 255 characters)
+  </ParamField>
+  <ParamField body="email" type="string">
+    Email address (max 255 characters)
+  </ParamField>
+  <ParamField body="web" type="string">
+    Website URL (max 255 characters)
+  </ParamField>
+  <ParamField body="usuario_sol" type="string" required>
+    SUNAT SOL username
+  </ParamField>
+  <ParamField body="clave_sol" type="string" required>
+    SUNAT SOL password
+  </ParamField>
+</ParamField>
+
+<ParamField body="certificado_pem" type="file">
+  Digital certificate file in PEM format (.pem, .crt, .cer, .txt) - Max 2MB
+</ParamField>
+
+<ParamField body="certificado_password" type="string">
+  Password for the digital certificate
+</ParamField>
+
+<ParamField body="logo_path" type="file">
+  Company logo image file (.jpeg, .jpg, .png, .gif) - Max 1MB
+</ParamField>
+
+<ParamField body="modo_produccion" type="boolean" default="false">
+  Enable production mode. Values: `true`, `false`, `1`, `0`
+</ParamField>
+
+<ParamField body="activo" type="boolean" default="true">
+  Company active status. Values: `true`, `false`, `1`, `0`
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://api.example.com/api/v1/setup/complete" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: multipart/form-data" \
+  -F 'environment=beta' \
+  -F 'company[ruc]=20123456789' \
+  -F 'company[razon_social]=MI EMPRESA SAC' \
+  -F 'company[nombre_comercial]=Mi Empresa' \
+  -F 'company[direccion]=Av. Principal 123, Miraflores' \
+  -F 'company[ubigeo]=150122' \
+  -F 'company[distrito]=Miraflores' \
+  -F 'company[provincia]=Lima' \
+  -F 'company[departamento]=Lima' \
+  -F 'company[telefono]=+51 1 1234567' \
+  -F 'company[email]=contacto@miempresa.com' \
+  -F 'company[web]=https://www.miempresa.com' \
+  -F 'company[usuario_sol]=MODDATOS' \
+  -F 'company[clave_sol]=moddatos' \
+  -F 'certificado_pem=@/path/to/certificate.pem' \
+  -F 'certificado_password=mycertpassword' \
+  -F 'logo_path=@/path/to/logo.png' \
+  -F 'modo_produccion=false' \
+  -F 'activo=true'
+```
+
+### Example Response
+
+```json
+{
+  "message": "Setup completado exitosamente",
+  "company": {
+    "id": 1,
+    "ruc": "20123456789",
+    "razon_social": "MI EMPRESA SAC",
+    "environment": "beta",
+    "has_certificate": true,
+    "branch_count": 1
+  },
+  "branch": {
+    "id": 1,
+    "codigo": "0000",
+    "nombre": "Sucursal Principal"
+  }
+}
+```
+
+---
+
+## Configure SUNAT
+
+<api method="POST" endpoint="/api/v1/setup/configure-sunat" />
+
+Configures or updates SUNAT integration settings for a company.
+
+<Note>
+  Requires authentication. User must be a super admin or belong to the company being configured.
+</Note>
+
+### Request Body
+
+<ParamField body="company_id" type="integer" required>
+  The company ID to configure
+</ParamField>
+
+<ParamField body="environment" type="string" required>
+  SUNAT environment: `beta` or `produccion`
+</ParamField>
+
+<ParamField body="certificate_file" type="file">
+  Digital certificate file in PEM format
+</ParamField>
+
+<ParamField body="certificate_password" type="string">
+  Certificate password
+</ParamField>
+
+<ParamField body="force_update" type="boolean" default="false">
+  Force update of existing configuration
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://api.example.com/api/v1/setup/configure-sunat" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: multipart/form-data" \
+  -F 'company_id=1' \
+  -F 'environment=produccion' \
+  -F 'certificate_file=@/path/to/production-cert.pem' \
+  -F 'certificate_password=prodpassword' \
+  -F 'force_update=true'
+```
+
+### Example Response
+
+```json
+{
+  "message": "Configuración SUNAT actualizada exitosamente",
+  "company": {
+    "id": 1,
+    "ruc": "20123456789",
+    "environment": "produccion",
+    "has_certificate": true
+  }
+}
+```
+
+---
+
+## Setup Workflow
+
+Follow this sequence for initial system setup:
+
+### Step 1: Check System Status
+
+```bash
+curl -X GET "https://api.example.com/api/setup/status"
+```
+
+Verify database connectivity and identify pending steps.
+
+### Step 2: Run Migrations
+
+```bash
+curl -X POST "https://api.example.com/api/setup/migrate"
+```
+
+Create database tables and schema.
+
+### Step 3: Run Seeders
+
+```bash
+curl -X POST "https://api.example.com/api/setup/seed"
+```
+
+Populate ubigeo data and other initial records.
+
+### Step 4: Initialize Admin User
+
+```bash
+curl -X POST "https://api.example.com/api/auth/initialize" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Admin User",
+    "email": "admin@example.com",
+    "password": "secure_password",
+    "password_confirmation": "secure_password"
+  }'
+```
+
+Create the first admin user account.
+
+### Step 5: Complete Setup
+
+```bash
+curl -X POST "https://api.example.com/api/v1/setup/complete" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F 'environment=beta' \
+  -F 'company[ruc]=20123456789' \
+  # ... other company fields
+```
+
+Create company, branch, and configure SUNAT integration.
+
+### Step 6: Verify Setup
+
+```bash
+curl -X GET "https://api.example.com/api/setup/status"
+```
+
+Confirm `ready_for_use` is `true`.
+
+---
+
+## Error Responses
+
+### Migrations Required
+
+```json
+{
+  "success": false,
+  "message": "Debe ejecutar las migraciones primero",
+  "required_action": "POST /api/setup/migrate",
+  "current_step": "migrations_required"
+}
+```
+
+### Seeders Required
+
+```json
+{
+  "success": false,
+  "message": "Debe ejecutar los seeders primero",
+  "required_action": "POST /api/setup/seed",
+  "current_step": "seeders_required"
+}
+```
+
+### Permission Denied
+
+```json
+{
+  "message": "No tienes permisos para configurar esta empresa",
+  "status": "error"
+}
+```
+
+### Validation Error
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "company.ruc": [
+      "El campo ruc es obligatorio.",
+      "El campo ruc debe tener 11 caracteres."
+    ],
+    "company.ubigeo": [
+      "El campo ubigeo debe tener 6 caracteres."
+    ],
+    "environment": [
+      "El campo environment debe ser beta o produccion."
+    ]
+  }
+}
+```
+
+---
+
+## SUNAT Environments
+
+<Accordion title="Beta Environment (Testing)">
+  **Use for**: Development, testing, training
+
+  **Endpoint**: `https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService`
+
+  **Credentials**: Use SUNAT-provided test credentials (MODDATOS/moddatos)
+
+  **Certificates**: Test certificates from SUNAT
+
+  **Features**:
+  - No real tax implications
+  - Can generate test documents freely
+  - RUC validation may be relaxed
+  - CDR responses may differ from production
+</Accordion>
+
+<Accordion title="Production Environment">
+  **Use for**: Real business operations
+
+  **Endpoint**: `https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService`
+
+  **Credentials**: Real company SOL credentials
+
+  **Certificates**: Valid digital certificates from authorized providers
+
+  **Features**:
+  - Real tax documents with legal validity
+  - Strict validation
+  - Must comply with all SUNAT regulations
+  - Documents are permanent and auditable
+
+  <Warning>
+    Only switch to production after thorough testing in beta environment and obtaining proper certificates.
+  </Warning>
+</Accordion>
+
+---
+
+## Digital Certificate Requirements
+
+<Info>
+  Digital certificates are required for signing electronic documents sent to SUNAT.
+</Info>
+
+### Certificate Format
+- **Format**: PEM (Privacy Enhanced Mail)
+- **File Extensions**: .pem, .crt, .cer
+- **Max Size**: 2MB
+
+### Obtaining Certificates
+
+1. **Beta Environment**: 
+   - Download test certificates from SUNAT's website
+   - No cost, for testing only
+
+2. **Production Environment**:
+   - Purchase from authorized Certificate Authorities (CA)
+   - Common providers in Peru: RENIEC, eCertiPerú, IFARHU
+   - Must be valid and not expired
+   - Associated with your company's RUC
+
+### Certificate Password
+
+- Store certificate password securely
+- Required for signing documents
+- Include in setup configuration
+
+---
+
+## Best Practices
+
+<Accordion title="Initial Setup">
+  1. Always start with the beta environment
+  2. Test thoroughly before switching to production
+  3. Keep backup of configuration data
+  4. Document your setup process
+  5. Store certificates and passwords securely
+</Accordion>
+
+<Accordion title="Security">
+  1. Use strong passwords for SOL credentials
+  2. Restrict access to setup endpoints in production
+  3. Enable HTTPS for all API communications
+  4. Regularly rotate SOL passwords
+  5. Monitor certificate expiration dates
+</Accordion>
+
+<Accordion title="Maintenance">
+  1. Keep system status checks automated
+  2. Set up alerts for certificate expiration
+  3. Regular backup of company configurations
+  4. Document any custom configurations
+  5. Plan for environment switches (beta to production)
+</Accordion>
+
+<Accordion title="Multi-Company Setup">
+  If managing multiple companies:
+  
+  1. Complete setup for first company
+  2. Use company management endpoints for additional companies
+  3. Each company needs its own:
+     - RUC and business information
+     - SOL credentials
+     - Digital certificate
+     - SUNAT environment configuration
+  4. Users can be assigned to specific companies
+</Accordion>

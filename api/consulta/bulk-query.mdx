@@ -1,0 +1,480 @@
+---
+title: 'Bulk Document Query'
+api: 'POST /api/v1/consulta-cpe/masivo'
+---
+
+Query the status of multiple electronic documents (invoices, boletas, credit notes, or debit notes) in a single request. This endpoint retrieves validation status from SUNAT for documents within a specified date range, with automatic rate limiting to comply with SUNAT's service requirements.
+
+## Authentication
+
+This endpoint requires authentication using Laravel Sanctum. Include the bearer token in the Authorization header:
+
+```bash
+Authorization: Bearer {your-api-token}
+```
+
+## Endpoint
+
+```
+POST /api/v1/consulta-cpe/masivo
+```
+
+## Request Body
+
+<ParamField body="company_id" type="integer" required>
+  The ID of the company whose documents will be queried. Must exist in the companies table.
+</ParamField>
+
+<ParamField body="tipo_documento" type="string" required>
+  The type of document to query. Valid values:
+  - `01`: Invoices (Facturas)
+  - `03`: Sales receipts (Boletas)
+  - `07`: Credit notes (Notas de Crédito)
+  - `08`: Debit notes (Notas de Débito)
+</ParamField>
+
+<ParamField body="fecha_desde" type="string" required>
+  Start date for the query range in `Y-m-d` format (e.g., 2026-03-01)
+</ParamField>
+
+<ParamField body="fecha_hasta" type="string" required>
+  End date for the query range in `Y-m-d` format (e.g., 2026-03-31). Must be equal to or after `fecha_desde`.
+</ParamField>
+
+<ParamField body="limit" type="integer" default="50">
+  Maximum number of documents to query. Valid range: 1-100. Defaults to 50 if not specified.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the bulk query operation was successful
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Human-readable message describing the result
+</ResponseField>
+
+<ResponseField name="data" type="object" required>
+  Contains bulk query statistics and individual results
+  
+  <ResponseField name="data.total_procesados" type="integer">
+    Total number of documents processed in the query
+  </ResponseField>
+  
+  <ResponseField name="data.exitosos" type="integer">
+    Number of successful queries
+  </ResponseField>
+  
+  <ResponseField name="data.fallidos" type="integer">
+    Number of failed queries
+  </ResponseField>
+  
+  <ResponseField name="data.resultados" type="array">
+    Array of individual query results for each document
+    
+    <ResponseField name="data.resultados[].documento_id" type="integer">
+      Internal ID of the queried document
+    </ResponseField>
+    
+    <ResponseField name="data.resultados[].serie_correlativo" type="string">
+      Document identifier in format "SERIES-CORRELATIVE" (e.g., "F001-00000123")
+    </ResponseField>
+    
+    <ResponseField name="data.resultados[].resultado" type="object">
+      Query result for this specific document
+      
+      <ResponseField name="data.resultados[].resultado.success" type="boolean">
+        Whether the query for this document was successful
+      </ResponseField>
+      
+      <ResponseField name="data.resultados[].resultado.message" type="string">
+        Result message for this document
+      </ResponseField>
+      
+      <ResponseField name="data.resultados[].resultado.data" type="object">
+        SUNAT query data (same structure as individual query endpoints)
+      </ResponseField>
+      
+      <ResponseField name="data.resultados[].resultado.comprobante_codigo" type="string">
+        Document code in format "SERIES-CORRELATIVE"
+      </ResponseField>
+      
+      <ResponseField name="data.resultados[].resultado.metodo" type="string">
+        Query method used: `api_oauth2` or `soap_sol`
+      </ResponseField>
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.yourdomain.com/api/v1/consulta-cpe/masivo \
+  -H "Authorization: Bearer {your-api-token}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "company_id": 1,
+    "tipo_documento": "01",
+    "fecha_desde": "2026-03-01",
+    "fecha_hasta": "2026-03-31",
+    "limit": 25
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.yourdomain.com/api/v1/consulta-cpe/masivo', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer {your-api-token}',
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  },
+  body: JSON.stringify({
+    company_id: 1,
+    tipo_documento: '01',
+    fecha_desde: '2026-03-01',
+    fecha_hasta: '2026-03-31',
+    limit: 25
+  })
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+
+url = "https://api.yourdomain.com/api/v1/consulta-cpe/masivo"
+headers = {
+    "Authorization": "Bearer {your-api-token}",
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+}
+data = {
+    "company_id": 1,
+    "tipo_documento": "01",
+    "fecha_desde": "2026-03-01",
+    "fecha_hasta": "2026-03-31",
+    "limit": 25
+}
+
+response = requests.post(url, headers=headers, json=data)
+result = response.json()
+print(result)
+```
+
+```php PHP
+<?php
+$curl = curl_init();
+
+$data = [
+    'company_id' => 1,
+    'tipo_documento' => '01',
+    'fecha_desde' => '2026-03-01',
+    'fecha_hasta' => '2026-03-31',
+    'limit' => 25
+];
+
+curl_setopt_array($curl, [
+    CURLOPT_URL => "https://api.yourdomain.com/api/v1/consulta-cpe/masivo",
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_CUSTOMREQUEST => "POST",
+    CURLOPT_POSTFIELDS => json_encode($data),
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer {your-api-token}",
+        "Content-Type: application/json",
+        "Accept: application/json"
+    ],
+]);
+
+$response = curl_exec($curl);
+$result = json_decode($response);
+
+curl_close($curl);
+print_r($result);
+?>
+```
+
+</CodeGroup>
+
+## Response Examples
+
+### Success Response (200)
+
+```json
+{
+  "success": true,
+  "message": "Consulta masiva completada",
+  "data": {
+    "total_procesados": 15,
+    "exitosos": 13,
+    "fallidos": 2,
+    "resultados": [
+      {
+        "documento_id": 123,
+        "serie_correlativo": "F001-00000456",
+        "resultado": {
+          "success": true,
+          "message": "Consulta realizada correctamente",
+          "data": {
+            "estadocpe": "1",
+            "estado_ruc": "ACTIVO",
+            "condicion_domicilio": "HABIDO",
+            "ubigeo": "150101",
+            "descripcion_estado": "Aceptado",
+            "consulta_fecha": "2026-03-05 16:20:15"
+          },
+          "comprobante_codigo": "F001-00000456",
+          "metodo": "api_oauth2"
+        }
+      },
+      {
+        "documento_id": 124,
+        "serie_correlativo": "F001-00000457",
+        "resultado": {
+          "success": true,
+          "message": "Consulta realizada correctamente",
+          "data": {
+            "estadocpe": "1",
+            "estado_ruc": "ACTIVO",
+            "condicion_domicilio": "HABIDO",
+            "ubigeo": "150101",
+            "descripcion_estado": "Aceptado",
+            "consulta_fecha": "2026-03-05 16:20:16"
+          },
+          "comprobante_codigo": "F001-00000457",
+          "metodo": "api_oauth2"
+        }
+      },
+      {
+        "documento_id": 125,
+        "serie_correlativo": "F001-00000458",
+        "resultado": {
+          "success": false,
+          "message": "El comprobante no existe en los registros de SUNAT",
+          "data": null
+        }
+      }
+    ]
+  }
+}
+```
+
+### Empty Result (200)
+
+```json
+{
+  "success": true,
+  "message": "No se encontraron documentos en el rango especificado",
+  "data": []
+}
+```
+
+### Validation Error (422)
+
+```json
+{
+  "message": "The fecha hasta field must be a date after or equal to fecha desde.",
+  "errors": {
+    "fecha_hasta": [
+      "The fecha hasta field must be a date after or equal to fecha desde."
+    ]
+  }
+}
+```
+
+### Invalid Document Type (422)
+
+```json
+{
+  "message": "The selected tipo documento is invalid.",
+  "errors": {
+    "tipo_documento": [
+      "The selected tipo documento is invalid."
+    ]
+  }
+}
+```
+
+### Server Error (500)
+
+```json
+{
+  "success": false,
+  "message": "Error en consulta masiva",
+  "error": "Database connection lost"
+}
+```
+
+## Status Codes
+
+<ResponseField name="200" type="OK">
+  Bulk query completed. Check individual results for per-document status.
+</ResponseField>
+
+<ResponseField name="422" type="Unprocessable Entity">
+  Validation error in request parameters
+</ResponseField>
+
+<ResponseField name="500" type="Internal Server Error">
+  Server error occurred during bulk query processing
+</ResponseField>
+
+## Document Selection Criteria
+
+The endpoint queries documents that match ALL of the following criteria:
+
+1. Belong to the specified company (`company_id`)
+2. Match the specified document type (`tipo_documento`)
+3. Have an issue date (`fecha_emision`) within the specified range
+4. Have a SUNAT status of `ACEPTADO`, `RECHAZADO`, or `NULL`
+5. Ordered by issue date (most recent first)
+6. Limited to the specified number of documents (max 100)
+
+<Note>
+  Documents with status `ACEPTADO`, `RECHAZADO`, or `NULL` are included because they may need status verification. Documents with other statuses are excluded from bulk queries.
+</Note>
+
+## Rate Limiting and Performance
+
+To protect SUNAT services and ensure reliable operation:
+
+- **Automatic Delay**: 0.5 seconds (500ms) between each query
+- **Maximum Documents**: 100 per request
+- **Default Limit**: 50 documents if not specified
+- **Token Caching**: OAuth2 tokens are cached for 45 minutes
+- **Fallback Support**: Automatically switches to SOAP SOL if OAuth2 fails
+
+<Info>
+  Processing time estimate: For 50 documents, expect approximately 25-30 seconds due to the 0.5-second delay between queries plus network latency.
+</Info>
+
+## Use Cases
+
+### Daily Status Verification
+
+```json
+{
+  "company_id": 1,
+  "tipo_documento": "01",
+  "fecha_desde": "2026-03-05",
+  "fecha_hasta": "2026-03-05",
+  "limit": 100
+}
+```
+
+Query all invoices issued today to verify their acceptance status.
+
+### Monthly Reconciliation
+
+```json
+{
+  "company_id": 1,
+  "tipo_documento": "03",
+  "fecha_desde": "2026-02-01",
+  "fecha_hasta": "2026-02-28",
+  "limit": 100
+}
+```
+
+Query all boletas from the previous month for accounting reconciliation.
+
+### Multi-Document Type Queries
+
+To query multiple document types, make separate requests:
+
+```javascript
+const documentTypes = ['01', '03', '07', '08'];
+const results = {};
+
+for (const tipo of documentTypes) {
+  const response = await fetch('/api/v1/consulta-cpe/masivo', {
+    method: 'POST',
+    headers: { /* ... */ },
+    body: JSON.stringify({
+      company_id: 1,
+      tipo_documento: tipo,
+      fecha_desde: '2026-03-01',
+      fecha_hasta: '2026-03-31',
+      limit: 50
+    })
+  });
+  
+  results[tipo] = await response.json();
+}
+```
+
+## Database Updates
+
+For each successfully queried document, the following fields are updated:
+
+- `consulta_cpe_estado`: CPE status code from SUNAT
+- `consulta_cpe_respuesta`: Full JSON response from SUNAT
+- `consulta_cpe_fecha`: Timestamp when the query was performed
+- `estado_sunat`: Current SUNAT status
+
+<Note>
+  Failed queries do not update the database. Only successful queries with valid responses from SUNAT will update document records.
+</Note>
+
+## Implementation Details
+
+The bulk query process (`app/Services/ConsultaCpeService.php:352`):
+
+1. Validate request parameters (company, document type, date range, limit)
+2. Retrieve documents matching the criteria from the appropriate table
+3. Return empty result if no documents found
+4. For each document:
+   - Query SUNAT using `consultarComprobante()` method
+   - Record success/failure
+   - Wait 0.5 seconds before next query
+5. Return aggregated results with statistics
+
+## Best Practices
+
+<Info>
+  **For Real-time Queries**: Use individual query endpoints (`/factura/{id}` or `/boleta/{id}`)
+  
+  **For Batch Processing**: Use this bulk endpoint with appropriate limits
+  
+  **For Large Datasets**: Split into multiple requests with smaller date ranges
+</Info>
+
+### Recommended Limits
+
+- **Small batches** (1-10 docs): Real-time, immediate results
+- **Medium batches** (11-50 docs): Background jobs, expect 30-60 seconds
+- **Large batches** (51-100 docs): Async processing, expect 1-2 minutes
+
+### Error Handling
+
+Individual document failures don't stop the bulk process. Check:
+
+1. Overall `success` flag
+2. `exitosos` vs `fallidos` counts
+3. Individual `resultado.success` for each document
+
+```javascript
+if (data.success) {
+  console.log(`Processed: ${data.data.total_procesados}`);
+  console.log(`Success: ${data.data.exitosos}, Failed: ${data.data.fallidos}`);
+  
+  // Check individual failures
+  data.data.resultados.forEach(doc => {
+    if (!doc.resultado.success) {
+      console.error(`Failed: ${doc.serie_correlativo}`);
+      console.error(`Reason: ${doc.resultado.message}`);
+    }
+  });
+}
+```
+
+## Related Endpoints
+
+- [Query Invoice Status](/api/consulta/query-invoice) - Query single invoice
+- [Query Boleta Status](/api/consulta/query-boleta) - Query single boleta

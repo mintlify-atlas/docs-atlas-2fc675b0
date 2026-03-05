@@ -1,0 +1,652 @@
+---
+title: 'Ubigeo Management'
+api: 'GET /api/v1/ubigeos/search'
+description: 'Access Peruvian geographic location codes (Ubigeo) for addresses'
+---
+
+## Overview
+
+The Ubigeo API provides access to Peru's official geographic location codes (Códigos de Ubigeo) as defined by INEI (Instituto Nacional de Estadística e Informática). These codes are required for electronic invoicing to specify business and customer addresses.
+
+### What is Ubigeo?
+
+Ubigeo is a 6-digit code that uniquely identifies geographic locations in Peru:
+- **First 2 digits**: Region/Department (e.g., "15" for Lima)
+- **Next 2 digits**: Province (e.g., "01" for Lima Province)
+- **Last 2 digits**: District (e.g., "01" for Lima District)
+
+Example: `150101` = Lima > Lima > Lima
+
+<Info>
+  Ubigeo codes are mandatory in SUNAT electronic documents for specifying company addresses, branch locations, and customer addresses.
+</Info>
+
+---
+
+## Search Ubigeo
+
+<api method="GET" endpoint="/api/v1/ubigeos/search" />
+
+Searches for ubigeo codes by name or partial text. Returns matching districts with their complete hierarchical information.
+
+### Query Parameters
+
+<ParamField query="q" type="string" required>
+  Search query (minimum 2 characters, maximum 255 characters)
+</ParamField>
+
+<ParamField query="region_id" type="string">
+  Optional filter by region ID (6 characters)
+</ParamField>
+
+<ParamField query="provincia_id" type="string">
+  Optional filter by province ID (6 characters)
+</ParamField>
+
+<Note>
+  The search is performed against district names and includes fuzzy matching for better results. Returns up to 20 results.
+</Note>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of matching districts
+  <ResponseField name="id" type="string">
+    Ubigeo code (6 digits)
+  </ResponseField>
+  <ResponseField name="nombre" type="string">
+    District name
+  </ResponseField>
+  <ResponseField name="provincia" type="string">
+    Province name
+  </ResponseField>
+  <ResponseField name="region" type="string">
+    Region/Department name
+  </ResponseField>
+  <ResponseField name="ubigeo_completo" type="string">
+    Full location path (Region - Province - District)
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/api/v1/ubigeos/search?q=miraflores" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "150122",
+      "nombre": "Miraflores",
+      "provincia": "Lima",
+      "region": "Lima",
+      "ubigeo_completo": "Lima - Lima - Miraflores"
+    },
+    {
+      "id": "130108",
+      "nombre": "Miraflores",
+      "provincia": "Huamalíes",
+      "region": "Huánuco",
+      "ubigeo_completo": "Huánuco - Huamalíes - Miraflores"
+    },
+    {
+      "id": "200805",
+      "nombre": "Miraflores",
+      "provincia": "Huaraz",
+      "region": "Áncash",
+      "ubigeo_completo": "Áncash - Huaraz - Miraflores"
+    }
+  ]
+}
+```
+
+---
+
+## Get Regions
+
+<api method="GET" endpoint="/api/v1/ubigeos/regiones" />
+
+Retrieves all regions (departments) in Peru.
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of regions
+  <ResponseField name="id" type="string">
+    Region code (6 digits, last 4 are "0000")
+  </ResponseField>
+  <ResponseField name="nombre" type="string">
+    Region name
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/api/v1/ubigeos/regiones" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "010000",
+      "nombre": "Amazonas"
+    },
+    {
+      "id": "020000",
+      "nombre": "Áncash"
+    },
+    {
+      "id": "030000",
+      "nombre": "Apurímac"
+    },
+    {
+      "id": "040000",
+      "nombre": "Arequipa"
+    },
+    {
+      "id": "150000",
+      "nombre": "Lima"
+    },
+    {
+      "id": "250000",
+      "nombre": "Ucayali"
+    }
+  ]
+}
+```
+
+---
+
+## Get Provinces
+
+<api method="GET" endpoint="/api/v1/ubigeos/provincias" />
+
+Retrieves provinces, optionally filtered by region.
+
+### Query Parameters
+
+<ParamField query="region_id" type="string">
+  Filter by region ID (6 characters). If not provided, returns all provinces.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of provinces
+  <ResponseField name="id" type="string">
+    Province code (6 digits, last 2 are "00")
+  </ResponseField>
+  <ResponseField name="nombre" type="string">
+    Province name
+  </ResponseField>
+  <ResponseField name="region_id" type="string">
+    Parent region code
+  </ResponseField>
+  <ResponseField name="region" type="object">
+    Parent region information
+    <ResponseField name="id" type="string">
+      Region code
+    </ResponseField>
+    <ResponseField name="nombre" type="string">
+      Region name
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/api/v1/ubigeos/provincias?region_id=150000" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "150100",
+      "nombre": "Lima",
+      "region_id": "150000",
+      "region": {
+        "id": "150000",
+        "nombre": "Lima"
+      }
+    },
+    {
+      "id": "150200",
+      "nombre": "Barranca",
+      "region_id": "150000",
+      "region": {
+        "id": "150000",
+        "nombre": "Lima"
+      }
+    },
+    {
+      "id": "150300",
+      "nombre": "Cajatambo",
+      "region_id": "150000",
+      "region": {
+        "id": "150000",
+        "nombre": "Lima"
+      }
+    }
+  ]
+}
+```
+
+---
+
+## Get Districts
+
+<api method="GET" endpoint="/api/v1/ubigeos/distritos" />
+
+Retrieves districts with optional filtering by province, region, or search text.
+
+### Query Parameters
+
+<ParamField query="provincia_id" type="string">
+  Filter by province ID (6 characters)
+</ParamField>
+
+<ParamField query="region_id" type="string">
+  Filter by region ID (6 characters)
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search by district name (minimum 2 characters, maximum 255 characters)
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of districts
+  <ResponseField name="id" type="string">
+    District ubigeo code (6 digits)
+  </ResponseField>
+  <ResponseField name="nombre" type="string">
+    District name
+  </ResponseField>
+  <ResponseField name="provincia_id" type="string">
+    Province code
+  </ResponseField>
+  <ResponseField name="region_id" type="string">
+    Region code
+  </ResponseField>
+  <ResponseField name="provincia" type="object">
+    Province information
+    <ResponseField name="id" type="string">
+      Province code
+    </ResponseField>
+    <ResponseField name="nombre" type="string">
+      Province name
+    </ResponseField>
+  </ResponseField>
+  <ResponseField name="region" type="object">
+    Region information
+    <ResponseField name="id" type="string">
+      Region code
+    </ResponseField>
+    <ResponseField name="nombre" type="string">
+      Region name
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/api/v1/ubigeos/distritos?provincia_id=150100&search=san" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "150130",
+      "nombre": "San Borja",
+      "provincia_id": "150100",
+      "region_id": "150000",
+      "provincia": {
+        "id": "150100",
+        "nombre": "Lima"
+      },
+      "region": {
+        "id": "150000",
+        "nombre": "Lima"
+      }
+    },
+    {
+      "id": "150131",
+      "nombre": "San Isidro",
+      "provincia_id": "150100",
+      "region_id": "150000",
+      "provincia": {
+        "id": "150100",
+        "nombre": "Lima"
+      },
+      "region": {
+        "id": "150000",
+        "nombre": "Lima"
+      }
+    },
+    {
+      "id": "150137",
+      "nombre": "San Juan de Lurigancho",
+      "provincia_id": "150100",
+      "region_id": "150000",
+      "provincia": {
+        "id": "150100",
+        "nombre": "Lima"
+      },
+      "region": {
+        "id": "150000",
+        "nombre": "Lima"
+      }
+    },
+    {
+      "id": "150132",
+      "nombre": "San Juan de Miraflores",
+      "provincia_id": "150100",
+      "region_id": "150000",
+      "provincia": {
+        "id": "150100",
+        "nombre": "Lima"
+      },
+      "region": {
+        "id": "150000",
+        "nombre": "Lima"
+      }
+    },
+    {
+      "id": "150133",
+      "nombre": "San Luis",
+      "provincia_id": "150100",
+      "region_id": "150000",
+      "provincia": {
+        "id": "150100",
+        "nombre": "Lima"
+      },
+      "region": {
+        "id": "150000",
+        "nombre": "Lima"
+      }
+    },
+    {
+      "id": "150134",
+      "nombre": "San Martín de Porres",
+      "provincia_id": "150100",
+      "region_id": "150000",
+      "provincia": {
+        "id": "150100",
+        "nombre": "Lima"
+      },
+      "region": {
+        "id": "150000",
+        "nombre": "Lima"
+      }
+    },
+    {
+      "id": "150135",
+      "nombre": "San Miguel",
+      "provincia_id": "150100",
+      "region_id": "150000",
+      "provincia": {
+        "id": "150100",
+        "nombre": "Lima"
+      },
+      "region": {
+        "id": "150000",
+        "nombre": "Lima"
+      }
+    }
+  ]
+}
+```
+
+---
+
+## Get Ubigeo by ID
+
+<api method="GET" endpoint="/api/v1/ubigeos/{id}" />
+
+Retrieves detailed information for a specific ubigeo code.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The 6-digit ubigeo code
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="id" type="string">
+    Ubigeo code (6 digits)
+  </ResponseField>
+  <ResponseField name="nombre" type="string">
+    District name
+  </ResponseField>
+  <ResponseField name="provincia_id" type="string">
+    Province code
+  </ResponseField>
+  <ResponseField name="provincia" type="string">
+    Province name
+  </ResponseField>
+  <ResponseField name="region_id" type="string">
+    Region code
+  </ResponseField>
+  <ResponseField name="region" type="string">
+    Region name
+  </ResponseField>
+  <ResponseField name="ubigeo_completo" type="string">
+    Full location path (Region - Province - District)
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/api/v1/ubigeos/150122" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "150122",
+    "nombre": "Miraflores",
+    "provincia_id": "150100",
+    "provincia": "Lima",
+    "region_id": "150000",
+    "region": "Lima",
+    "ubigeo_completo": "Lima - Lima - Miraflores"
+  }
+}
+```
+
+---
+
+## Error Responses
+
+### Invalid Ubigeo Length
+
+```json
+{
+  "success": false,
+  "message": "El código de ubigeo debe tener exactamente 6 dígitos"
+}
+```
+
+### Ubigeo Not Found
+
+```json
+{
+  "success": false,
+  "message": "Ubigeo no encontrado"
+}
+```
+
+### Validation Error
+
+```json
+{
+  "success": false,
+  "message": "Errores de validación",
+  "errors": {
+    "q": [
+      "El campo de búsqueda es requerido",
+      "La búsqueda debe tener al menos 2 caracteres"
+    ]
+  }
+}
+```
+
+---
+
+## Common Ubigeo Codes
+
+<Accordion title="Lima Metropolitan Area">
+  - **150101**: Lima - Lima - Lima (Centro)
+  - **150122**: Lima - Lima - Miraflores
+  - **150130**: Lima - Lima - San Borja
+  - **150131**: Lima - Lima - San Isidro
+  - **150140**: Lima - Lima - Surco
+  - **150141**: Lima - Lima - Surquillo
+  - **150143**: Lima - Lima - La Molina
+</Accordion>
+
+<Accordion title="Major Cities">
+  - **040101**: Arequipa - Arequipa - Arequipa
+  - **130101**: La Libertad - Trujillo - Trujillo
+  - **080101**: Cusco - Cusco - Cusco
+  - **200101**: Piura - Piura - Piura
+  - **140101**: Lambayeque - Chiclayo - Chiclayo
+</Accordion>
+
+## Implementation Guide
+
+<Accordion title="Building a Location Selector">
+  To build a hierarchical location selector (Region > Province > District):
+
+  1. **Load Regions**: Call `GET /api/v1/ubigeos/regiones` to populate the region dropdown
+  2. **Load Provinces**: When user selects a region, call `GET /api/v1/ubigeos/provincias?region_id={region_id}` 
+  3. **Load Districts**: When user selects a province, call `GET /api/v1/ubigeos/distritos?provincia_id={provincia_id}`
+  4. **Store the Ubigeo**: Save the 6-digit district code from the final selection
+</Accordion>
+
+<Accordion title="Using Search for Quick Selection">
+  For a simpler user experience with autocomplete:
+
+  1. Implement a search input field
+  2. Call `GET /api/v1/ubigeos/search?q={query}` as the user types (minimum 2 characters)
+  3. Display results showing the full path (Region - Province - District)
+  4. Store the selected ubigeo code
+
+  This is faster for users who know their location name.
+</Accordion>
+
+<Accordion title="Validating Ubigeo Codes">
+  When receiving ubigeo codes from external sources:
+
+  1. Verify the code is exactly 6 digits
+  2. Call `GET /api/v1/ubigeos/{id}` to validate it exists
+  3. Display the full location name for user confirmation
+  4. Store both the code and the location name for reference
+</Accordion>
+
+## Best Practices
+
+<Note>
+  **Always store the 6-digit ubigeo code**, not just the location names. Names can have variations, but codes are standardized.
+</Note>
+
+<Note>
+  **Include ubigeo in all address records** for companies, branches, and customers. This is required for SUNAT electronic documents.
+</Note>
+
+<Note>
+  **Use the search endpoint** for better UX when you have many locations. It provides fuzzy matching and quick results.
+</Note>
+
+<Warning>
+  Ubigeo codes are maintained by INEI and rarely change, but **periodically sync your local database** with the API to ensure you have the latest codes.
+</Warning>
+
+## Integration with Electronic Documents
+
+Ubigeo codes are used in several places within electronic documents:
+
+- **Company Address**: Main business location (required)
+- **Branch Address**: Each branch/establishment location (required)
+- **Customer Address**: Buyer's location (required for some document types)
+- **Delivery Address**: Destination in delivery guides (required for guías de remisión)
+
+Example usage in an invoice:
+
+```json
+{
+  "company": {
+    "ruc": "20123456789",
+    "razon_social": "Mi Empresa SAC",
+    "direccion": "Av. Principal 123",
+    "ubigeo": "150122",
+    "departamento": "Lima",
+    "provincia": "Lima",
+    "distrito": "Miraflores"
+  },
+  "customer": {
+    "tipo_documento": "6",
+    "numero_documento": "20987654321",
+    "razon_social": "Cliente SAC",
+    "direccion": "Jr. Comercio 456",
+    "ubigeo": "150131"
+  }
+}
+```

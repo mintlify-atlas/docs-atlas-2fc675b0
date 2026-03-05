@@ -1,0 +1,341 @@
+---
+title: 'Query Boleta Status'
+api: 'POST /api/v1/consulta-cpe/boleta/{id}'
+---
+
+Query the status of a specific sales receipt (boleta) from SUNAT's electronic invoice system. This endpoint retrieves the validation status, acceptance state, and additional information about the boleta from SUNAT's records.
+
+## Authentication
+
+This endpoint requires authentication using Laravel Sanctum. Include the bearer token in the Authorization header:
+
+```bash
+Authorization: Bearer {your-api-token}
+```
+
+## Endpoint
+
+```
+POST /api/v1/consulta-cpe/boleta/{id}
+```
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The internal ID of the boleta to query. This is the primary key from the boletas table.
+</ParamField>
+
+## Query Methods
+
+The service automatically attempts two methods in order:
+
+1. **OAuth2 API** (Primary): Uses SUNAT's modern API with OAuth2 authentication
+2. **SOAP SOL** (Fallback): Uses traditional SOAP web services with SOL credentials if OAuth2 fails
+
+<Info>
+  The system automatically caches OAuth2 tokens for 45 minutes to optimize performance and reduce authentication requests.
+</Info>
+
+## Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the query was successful
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Human-readable message describing the result
+</ResponseField>
+
+<ResponseField name="data" type="object" required>
+  Contains the boleta information and query results
+  
+  <ResponseField name="data.comprobante" type="object">
+    Basic information about the queried boleta
+    
+    <ResponseField name="data.comprobante.id" type="integer">
+      Boleta internal ID
+    </ResponseField>
+    
+    <ResponseField name="data.comprobante.tipo_documento" type="string">
+      Document type code (03 for boletas)
+    </ResponseField>
+    
+    <ResponseField name="data.comprobante.serie" type="string">
+      Boleta series (e.g., B001)
+    </ResponseField>
+    
+    <ResponseField name="data.comprobante.correlativo" type="string">
+      Boleta correlative number
+    </ResponseField>
+    
+    <ResponseField name="data.comprobante.fecha_emision" type="string">
+      Issue date in Y-m-d format
+    </ResponseField>
+    
+    <ResponseField name="data.comprobante.monto" type="number">
+      Total boleta amount
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="data.consulta" type="object">
+    SUNAT query results
+    
+    <ResponseField name="data.consulta.estadocpe" type="string">
+      CPE status code:
+      - `1`: Accepted (Aceptado)
+      - `2`: Annulled (Anulado)
+      - `3`: Authorized (Autorizado)
+      - `0`: Does not exist (No existe)
+      - `-1`: Query error
+    </ResponseField>
+    
+    <ResponseField name="data.consulta.estado_ruc" type="string">
+      RUC status from SUNAT registry
+    </ResponseField>
+    
+    <ResponseField name="data.consulta.condicion_domicilio" type="string">
+      Tax domicile condition
+    </ResponseField>
+    
+    <ResponseField name="data.consulta.ubigeo" type="string">
+      Geographic location code (ubigeo)
+    </ResponseField>
+    
+    <ResponseField name="data.consulta.descripcion_estado" type="string">
+      Human-readable status description in Spanish
+    </ResponseField>
+    
+    <ResponseField name="data.consulta.consulta_fecha" type="string">
+      Timestamp when the query was performed (Y-m-d H:i:s)
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.yourdomain.com/api/v1/consulta-cpe/boleta/456 \
+  -H "Authorization: Bearer {your-api-token}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.yourdomain.com/api/v1/consulta-cpe/boleta/456', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer {your-api-token}',
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  }
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+
+url = "https://api.yourdomain.com/api/v1/consulta-cpe/boleta/456"
+headers = {
+    "Authorization": "Bearer {your-api-token}",
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+}
+
+response = requests.post(url, headers=headers)
+data = response.json()
+print(data)
+```
+
+```php PHP
+<?php
+$curl = curl_init();
+
+curl_setopt_array($curl, [
+    CURLOPT_URL => "https://api.yourdomain.com/api/v1/consulta-cpe/boleta/456",
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_CUSTOMREQUEST => "POST",
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer {your-api-token}",
+        "Content-Type: application/json",
+        "Accept: application/json"
+    ],
+]);
+
+$response = curl_exec($curl);
+$data = json_decode($response);
+
+curl_close($curl);
+print_r($data);
+?>
+```
+
+</CodeGroup>
+
+## Response Examples
+
+### Success Response (200)
+
+```json
+{
+  "success": true,
+  "message": "Consulta realizada correctamente",
+  "data": {
+    "comprobante": {
+      "id": 456,
+      "tipo_documento": "03",
+      "serie": "B001",
+      "correlativo": "00001234",
+      "fecha_emision": "2026-03-05",
+      "monto": 250.50
+    },
+    "consulta": {
+      "estadocpe": "1",
+      "estado_ruc": "ACTIVO",
+      "condicion_domicilio": "HABIDO",
+      "ubigeo": "150131",
+      "descripcion_estado": "Aceptado",
+      "consulta_fecha": "2026-03-05 15:45:10"
+    }
+  }
+}
+```
+
+### Annulled Document Response (200)
+
+```json
+{
+  "success": true,
+  "message": "Consulta realizada correctamente",
+  "data": {
+    "comprobante": {
+      "id": 457,
+      "tipo_documento": "03",
+      "serie": "B001",
+      "correlativo": "00001235",
+      "fecha_emision": "2026-03-04",
+      "monto": 180.00
+    },
+    "consulta": {
+      "estadocpe": "2",
+      "estado_ruc": "ACTIVO",
+      "condicion_domicilio": "HABIDO",
+      "ubigeo": "150131",
+      "descripcion_estado": "Anulado",
+      "consulta_fecha": "2026-03-05 15:46:22"
+    }
+  }
+}
+```
+
+### Error Response (404)
+
+```json
+{
+  "success": false,
+  "message": "No query results for model [App\\Models\\Boleta] 456",
+  "error": "Model not found"
+}
+```
+
+### SUNAT Query Error (422)
+
+```json
+{
+  "success": false,
+  "message": "El comprobante no existe en los registros de SUNAT",
+  "data": {
+    "comprobante": {
+      "id": 456,
+      "tipo_documento": "03",
+      "serie": "B001",
+      "correlativo": "00001234",
+      "fecha_emision": "2026-03-05",
+      "monto": 250.50
+    },
+    "consulta": null
+  }
+}
+```
+
+### Server Error (500)
+
+```json
+{
+  "success": false,
+  "message": "Error al consultar boleta",
+  "error": "SOAP connection failed: timeout"
+}
+```
+
+## Status Codes
+
+<ResponseField name="200" type="OK">
+  Query completed successfully, boleta status retrieved from SUNAT
+</ResponseField>
+
+<ResponseField name="404" type="Not Found">
+  Boleta with the specified ID does not exist in the database
+</ResponseField>
+
+<ResponseField name="422" type="Unprocessable Entity">
+  Query was performed but SUNAT returned an error (e.g., document not found in SUNAT records)
+</ResponseField>
+
+<ResponseField name="500" type="Internal Server Error">
+  Server error occurred during query processing
+</ResponseField>
+
+## Database Updates
+
+When a successful query is performed, the boleta record is automatically updated with:
+
+- `consulta_cpe_estado`: The CPE status code from SUNAT
+- `consulta_cpe_respuesta`: JSON-encoded full response from SUNAT
+- `consulta_cpe_fecha`: Timestamp of the query
+- `estado_sunat`: Updated with the current SUNAT status
+
+<Note>
+  This endpoint uses the same `ConsultaCpeService` as invoices, but operates on the Boleta model. The service is defined in `app/Services/ConsultaCpeService.php:36`.
+</Note>
+
+## Implementation Details
+
+The query process follows these steps:
+
+1. Retrieve the boleta with company information from the database
+2. Attempt OAuth2 authentication with SUNAT API using cached or new token
+3. Create a CpeFilter object with boleta details (RUC, document type, series, correlative, date, amount)
+4. Query SUNAT API for document status
+5. If OAuth2 fails, automatically fallback to SOAP SOL credentials method
+6. Process and interpret the response codes
+7. Update the boleta record with query results
+8. Return formatted response with document and query information
+
+## Difference from Invoice Query
+
+While functionally identical to the invoice query endpoint, this endpoint:
+
+- Operates on the `boletas` table instead of `invoices`
+- Uses document type code `03` instead of `01`
+- Typically uses series starting with 'B' (e.g., B001, B002) instead of 'F'
+
+<Info>
+  Boletas are commonly used for sales to final consumers without RUC, while invoices (facturas) are used for business-to-business transactions.
+</Info>
+
+## Rate Limiting
+
+To avoid rate limiting from SUNAT:
+
+- Single queries are performed immediately
+- For multiple queries, consider using the bulk query endpoint instead
+- The service includes automatic delays (0.5 seconds) between consecutive queries in bulk operations
+
+<Note>
+  SUNAT's services may have rate limits. If you need to query multiple boletas, use the bulk query endpoint (`/api/v1/consulta-cpe/masivo`) which implements proper throttling.
+</Note>

@@ -1,0 +1,624 @@
+---
+title: 'SUNAT Environments'
+description: 'Beta vs Production environments, SUNAT endpoints, testing, and environment switching'
+---
+
+## Overview
+
+SUNAT provides two separate environments for electronic invoicing:
+
+- **Beta (Testing)** - For development and testing
+- **Production** - For real business documents
+
+<Warning>
+  Documents sent to Beta are **not legally valid**. Use Production environment for all real business transactions.
+</Warning>
+
+## Environment Comparison
+
+<Tabs>
+  <Tab title="Beta / Testing">
+    **Purpose:** Development, testing, and training
+    
+    **Characteristics:**
+    - No legal validity
+    - Test credentials provided by SUNAT
+    - Relaxed validation rules
+    - May have downtime for maintenance
+    - Free to use
+    
+    **When to Use:**
+    - Initial integration development
+    - Testing new document types
+    - Training users
+    - Debugging issues
+    
+    **Endpoints:**
+    - **Invoicing:** `https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService`
+    - **Dispatch Guides (GRE):** `https://api-cpe-beta.sunat.gob.pe/v1/`
+    
+    **Test Credentials:**
+    ```
+    RUC: 20161515648
+    Usuario SOL: MODDATOS
+    Clave SOL: MODDATOS
+    ```
+  </Tab>
+  
+  <Tab title="Production">
+    **Purpose:** Real business documents
+    
+    **Characteristics:**
+    - Legally valid documents
+    - Company's real credentials required
+    - Strict validation rules
+    - High availability SLA
+    - Subject to SUNAT regulations
+    
+    **When to Use:**
+    - All real business transactions
+    - After successful Beta testing
+    - When company is registered with SUNAT
+    
+    **Endpoints:**
+    - **Invoicing:** `https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService`
+    - **Dispatch Guides (GRE):** `https://api-cpe.sunat.gob.pe/v1/`
+    
+    **Credentials:**
+    - Your company's RUC
+    - Usuario SOL (from SUNAT)
+    - Clave SOL (from SUNAT)
+  </Tab>
+</Tabs>
+
+## Configuration
+
+### Company Model
+
+Environment configuration is managed at the company level:
+
+**Location:** `app/Models/Company.php:14`
+
+```php app/Models/Company.php
+protected $fillable = [
+    'ruc',
+    'razon_social',
+    'usuario_sol',              // SOL credentials
+    'clave_sol',
+    'endpoint_beta',            // Beta environment endpoint
+    'endpoint_produccion',      // Production environment endpoint
+    'modo_produccion',          // Boolean: false = Beta, true = Production
+    'gre_client_id_beta',       // GRE credentials for Beta
+    'gre_client_secret_beta',
+    'gre_client_id_produccion', // GRE credentials for Production
+    'gre_client_secret_produccion',
+];
+
+protected $casts = [
+    'modo_produccion' => 'boolean',
+];
+```
+
+### Default Endpoints
+
+Endpoints are automatically configured when creating a company:
+
+**Location:** `app/Models/Company.php:130`
+
+```php app/Models/Company.php
+protected static function boot()
+{
+    parent::boot();
+    
+    static::creating(function ($company) {
+        // Set default Beta endpoint
+        if (empty($company->endpoint_beta)) {
+            $company->endpoint_beta = 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService';
+        }
+        
+        // Set default Production endpoint
+        if (empty($company->endpoint_produccion)) {
+            $company->endpoint_produccion = 'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService';
+        }
+        
+        // Default to Beta mode
+        $company->modo_produccion = $company->modo_produccion ?? false;
+    });
+}
+```
+
+### Environment Switching
+
+Switch between Beta and Production by updating `modo_produccion`:
+
+```php
+// Switch to Production
+$company->update(['modo_produccion' => true]);
+
+// Switch to Beta
+$company->update(['modo_produccion' => false]);
+```
+
+**API Endpoint:**
+```bash
+PATCH /api/companies/{id}
+```
+
+**Request Body:**
+```json
+{
+  "modo_produccion": true
+}
+```
+
+## Service Endpoints
+
+SUNAT has different endpoints for different document types.
+
+### Invoicing Endpoints (Facturas, Boletas, Notas)
+
+**Configuration:** `app/Traits/HasCompanyConfigurations.php:586`
+
+<Tabs>
+  <Tab title="Beta">
+    ```php
+    'config_type' => 'service_endpoints',
+    'environment' => 'beta',
+    'service_type' => 'facturacion',
+    'config_data' => [
+        'endpoint' => 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService',
+        'wsdl' => 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService?wsdl',
+        'timeout' => 30,
+    ]
+    ```
+    
+    **Documents Supported:**
+    - Facturas (01)
+    - Boletas (03)
+    - Credit Notes (07)
+    - Debit Notes (08)
+    - Daily Summaries
+    - Voided Documents
+  </Tab>
+  
+  <Tab title="Production">
+    ```php
+    'config_type' => 'service_endpoints',
+    'environment' => 'produccion',
+    'service_type' => 'facturacion',
+    'config_data' => [
+        'endpoint' => 'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService',
+        'wsdl' => 'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService?wsdl',
+        'timeout' => 45,
+    ]
+    ```
+  </Tab>
+</Tabs>
+
+### Dispatch Guide Endpoints (Guías de Remisión - GRE)
+
+<Tabs>
+  <Tab title="Beta">
+    ```php
+    'config_type' => 'service_endpoints',
+    'environment' => 'beta',
+    'service_type' => 'guias_remision',
+    'config_data' => [
+        'endpoint' => 'https://gre-test.nubefact.com/v1',
+        'api_endpoint' => 'https://api-cpe-beta.sunat.gob.pe/v1/',
+        'wsdl' => 'https://e-beta.sunat.gob.pe/ol-ti-itcpgre-beta/billService?wsdl',
+        'timeout' => 30,
+    ]
+    ```
+    
+    <Note>
+      GRE uses OAuth2 authentication instead of SOAP. Requires `client_id` and `client_secret`.
+    </Note>
+  </Tab>
+  
+  <Tab title="Production">
+    ```php
+    'config_type' => 'service_endpoints',
+    'environment' => 'produccion',
+    'service_type' => 'guias_remision',
+    'config_data' => [
+        'endpoint' => 'https://api-cpe.sunat.gob.pe/v1/',
+        'api_endpoint' => 'https://api-cpe.sunat.gob.pe/v1/',
+        'wsdl' => 'https://e-guiaremision.sunat.gob.pe/ol-ti-itemision-guia-gem/billService?wsdl',
+        'timeout' => 45,
+    ]
+    ```
+  </Tab>
+</Tabs>
+
+## Dynamic Endpoint Selection
+
+The system automatically selects endpoints based on `modo_produccion`:
+
+**Location:** `app/Traits/HasCompanyConfigurations.php:368`
+
+```php app/Traits/HasCompanyConfigurations.php
+public function getInvoiceEndpoint(): string
+{
+    return $this->getSunatEndpoint('facturacion', 'endpoint');
+}
+
+public function getGuideEndpoint(): string
+{
+    return $this->getSunatEndpoint('guias_remision', 'endpoint');
+}
+
+public function getGuideApiEndpoint(): string
+{
+    return $this->getSunatEndpoint('guias_remision', 'api_endpoint');
+}
+
+private function getSunatEndpoint(string $serviceType, string $type = 'endpoint'): string
+{
+    $environment = $this->modo_produccion ? 'produccion' : 'beta';
+    $endpoints = $this->getSunatEndpoints($serviceType);
+    return $endpoints[$type] ?? '';
+}
+```
+
+## GreenterService Configuration
+
+GreenterService initializes with environment-specific settings:
+
+**Location:** `app/Services/GreenterService.php:50`
+
+```php app/Services/GreenterService.php
+protected function initializeSee(): See
+{
+    $see = new See();
+    
+    // Get endpoint based on company's mode
+    $endpoint = $this->company->getInvoiceEndpoint();
+    $see->setService($endpoint);
+    
+    Log::info("Greenter initialized", [
+        'mode' => $this->company->modo_produccion ? 'PRODUCTION' : 'BETA',
+        'endpoint' => $endpoint,
+        'ruc' => $this->company->ruc
+    ]);
+    
+    // Load certificate
+    $certificadoPath = storage_path('app/public/certificado/certificado.pem');
+    $certificadoContent = file_get_contents($certificadoPath);
+    $see->setCertificate($certificadoContent);
+    
+    // Set SOL credentials
+    $see->setClaveSOL(
+        $this->company->ruc,
+        $this->company->usuario_sol,
+        $this->company->clave_sol
+    );
+    
+    return $see;
+}
+```
+
+## Testing in Beta
+
+### Setup Beta Testing
+
+<Steps>
+  <Step title="Create Test Company">
+    ```bash
+    POST /api/companies
+    ```
+    
+    ```json
+    {
+      "ruc": "20161515648",
+      "razon_social": "EMPRESA DE PRUEBA",
+      "usuario_sol": "MODDATOS",
+      "clave_sol": "MODDATOS",
+      "modo_produccion": false
+    }
+    ```
+  </Step>
+  
+  <Step title="Configure Test Certificate">
+    Use SUNAT's test certificate or your own test certificate.
+    
+    ```bash
+    cp test-certificate.pem storage/app/public/certificado/certificado.pem
+    ```
+  </Step>
+  
+  <Step title="Create Test Documents">
+    ```bash
+    POST /api/invoices
+    ```
+    
+    Use test client data:
+    ```json
+    {
+      "client": {
+        "tipo_documento": "6",
+        "numero_documento": "20123456789",
+        "razon_social": "CLIENTE DE PRUEBA"
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Verify Beta Response">
+    Check that documents are accepted by Beta environment:
+    
+    ```json
+    {
+      "estado_sunat": "ACEPTADO",
+      "respuesta_sunat": {
+        "code": "0",
+        "description": "La Factura numero F001-123 ha sido aceptada"
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+### Beta Testing Checklist
+
+<AccordionGroup>
+  <Accordion title="Test All Document Types">
+    - [ ] Facturas (01)
+    - [ ] Boletas (03)
+    - [ ] Credit Notes (07)
+    - [ ] Debit Notes (08)
+    - [ ] Daily Summaries
+    - [ ] Voided Documents
+    - [ ] Dispatch Guides (09)
+  </Accordion>
+  
+  <Accordion title="Test Tax Scenarios">
+    - [ ] Gravada (IGV 18%)
+    - [ ] Exonerada (No IGV)
+    - [ ] Inafecta (No IGV)
+    - [ ] Gratuita (Free items)
+    - [ ] IVAP (Rice tax)
+    - [ ] ISC (Selective consumption)
+    - [ ] ICBPER (Plastic bag tax)
+  </Accordion>
+  
+  <Accordion title="Test Payment Methods">
+    - [ ] Contado (Cash)
+    - [ ] Crédito (Credit with installments)
+    - [ ] Multiple installments
+  </Accordion>
+  
+  <Accordion title="Test Error Handling">
+    - [ ] Invalid RUC
+    - [ ] Missing required fields
+    - [ ] Invalid tax calculations
+    - [ ] Network timeouts
+    - [ ] SUNAT rejection codes
+  </Accordion>
+</AccordionGroup>
+
+## Production Deployment
+
+### Pre-Production Checklist
+
+<Steps>
+  <Step title="Verify Company Registration">
+    - [ ] Company is registered with SUNAT for electronic invoicing
+    - [ ] Valid SOL credentials obtained from SUNAT
+    - [ ] Production digital certificate acquired from approved CA
+  </Step>
+  
+  <Step title="Update Credentials">
+    ```bash
+    PATCH /api/companies/{id}
+    ```
+    
+    ```json
+    {
+      "ruc": "20123456789",
+      "razon_social": "MI EMPRESA SAC",
+      "usuario_sol": "[YOUR_SOL_USER]",
+      "clave_sol": "[YOUR_SOL_PASSWORD]"
+    }
+    ```
+  </Step>
+  
+  <Step title="Install Production Certificate">
+    ```bash
+    cp production-certificate.pem storage/app/public/certificado/certificado.pem
+    chmod 600 storage/app/public/certificado/certificado.pem
+    ```
+    
+    Verify:
+    ```bash
+    php artisan certificate:validate
+    ```
+  </Step>
+  
+  <Step title="Switch to Production Mode">
+    ```bash
+    PATCH /api/companies/{id}
+    ```
+    
+    ```json
+    {
+      "modo_produccion": true
+    }
+    ```
+    
+    <Warning>
+      After this step, all documents will be legally valid and reported to SUNAT.
+    </Warning>
+  </Step>
+  
+  <Step title="Test First Document">
+    Create a test invoice with small amount:
+    
+    ```json
+    {
+      "serie": "F001",
+      "cliente": {...},
+      "items": [
+        {
+          "descripcion": "PRODUCTO DE PRUEBA",
+          "cantidad": 1,
+          "precio_unitario": 1.00
+        }
+      ]
+    }
+    ```
+    
+    Verify acceptance from SUNAT.
+  </Step>
+</Steps>
+
+## Environment Comparison
+
+| Feature | Beta | Production |
+|---------|------|------------|
+| **Legal Validity** | No | Yes |
+| **Credentials** | Test credentials | Real SOL credentials |
+| **Certificate** | Test or real | Must be real |
+| **Validation** | Relaxed | Strict |
+| **Availability** | May have downtime | High availability |
+| **Cost** | Free | Free (service), certificate costs vary |
+| **Document Storage** | Temporary | Permanent |
+| **CDR Response** | Similar format | Official format |
+| **Monitoring** | Not monitored | Subject to SUNAT audits |
+
+## Environment-Specific Configurations
+
+### Configuration Trait
+
+The `HasCompanyConfigurations` trait manages environment-specific settings:
+
+**Location:** `app/Traits/HasCompanyConfigurations.php:44`
+
+```php app/Traits/HasCompanyConfigurations.php
+public function getConfig(string $configType, string $environment = null, string $serviceType = null)
+{
+    // Auto-select environment based on modo_produccion
+    $environment = $environment ?? ($this->modo_produccion ? 'produccion' : 'beta');
+    
+    return Cache::remember($cacheKey, 3600, function () use ($configType, $environment, $serviceType) {
+        $config = $this->activeConfigurations()
+            ->where('config_type', $configType)
+            ->where('environment', $environment)
+            ->when($serviceType, fn($q) => $q->where('service_type', $serviceType))
+            ->first();
+        
+        return $config ? $config->config_data : null;
+    });
+}
+```
+
+### GRE Credentials by Environment
+
+**Location:** `app/Traits/HasCompanyConfigurations.php:210`
+
+```php app/Traits/HasCompanyConfigurations.php
+public function getGreClientId(): ?string
+{
+    return $this->modo_produccion 
+        ? $this->gre_client_id_produccion 
+        : $this->gre_client_id_beta;
+}
+
+public function getGreClientSecret(): ?string
+{
+    return $this->modo_produccion 
+        ? $this->gre_client_secret_produccion 
+        : $this->gre_client_secret_beta;
+}
+```
+
+## Logging and Monitoring
+
+The system logs environment information for debugging:
+
+```php
+Log::info("Document sent to SUNAT", [
+    'environment' => $company->modo_produccion ? 'PRODUCTION' : 'BETA',
+    'endpoint' => $endpoint,
+    'document_type' => $document->tipo_documento,
+    'document_number' => $document->numero_completo,
+    'estado_sunat' => $document->estado_sunat,
+]);
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Test Thoroughly in Beta" icon="flask">
+    Complete all testing scenarios in Beta before switching to Production
+  </Card>
+  
+  <Card title="Use Separate Databases" icon="database">
+    Maintain separate databases for Beta and Production environments
+  </Card>
+  
+  <Card title="Monitor Production" icon="chart-line">
+    Set up alerts for SUNAT rejections and errors in Production
+  </Card>
+  
+  <Card title="Backup Before Switching" icon="floppy-disk">
+    Back up database and configurations before switching environments
+  </Card>
+</CardGroup>
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Error: Invalid credentials in Production">
+    **Cause:** Using test credentials (MODDATOS) in Production mode.
+    
+    **Solution:**
+    ```php
+    $company->update([
+        'usuario_sol' => '[YOUR_REAL_SOL_USER]',
+        'clave_sol' => '[YOUR_REAL_SOL_PASSWORD]',
+    ]);
+    ```
+  </Accordion>
+  
+  <Accordion title="Error: Certificate rejected in Production">
+    **Cause:** Using test certificate in Production or certificate doesn't match RUC.
+    
+    **Solution:**
+    - Verify certificate CN matches company RUC
+    - Ensure certificate is from SUNAT-approved CA
+    - Check certificate hasn't expired
+  </Accordion>
+  
+  <Accordion title="Documents accepted in Beta but rejected in Production">
+    **Cause:** Production has stricter validation than Beta.
+    
+    **Solution:**
+    - Review SUNAT rejection message
+    - Ensure all required fields are present
+    - Verify tax calculations are exact
+    - Check document series is authorized by SUNAT
+  </Accordion>
+  
+  <Accordion title="Can't switch back to Beta">
+    **Cause:** Once in Production, switching back can confuse document tracking.
+    
+    **Solution:**
+    - Use separate companies for Beta and Production
+    - If you must switch, ensure all pending documents are completed first
+    ```php
+    $company->update(['modo_produccion' => false]);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Your First Invoice" icon="file-invoice" href="/api-reference/invoices/create">
+    Start sending documents to SUNAT
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Explore all available endpoints
+  </Card>
+</CardGroup>

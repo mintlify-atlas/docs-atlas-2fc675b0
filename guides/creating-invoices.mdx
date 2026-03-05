@@ -1,0 +1,517 @@
+---
+title: 'Creating Invoices (Facturas)'
+description: 'Complete guide to creating electronic invoices with the SUNAT API'
+---
+
+## Overview
+
+Facturas (Invoices) are the primary electronic documents for B2B transactions in Peru. This guide covers creating, sending to SUNAT, and managing invoices using the API.
+
+## Prerequisites
+
+Before creating invoices, ensure you have:
+
+- A configured company with valid SUNAT credentials
+- At least one active branch with configured invoice series
+- Valid client information (RUC for invoices)
+
+## Creating an Invoice
+
+### Basic Invoice Creation
+
+<Steps>
+  <Step title="Prepare the Request">
+    Create a POST request to `/api/invoices` with the invoice data.
+  </Step>
+  
+  <Step title="Send to SUNAT">
+    After creation, send the invoice to SUNAT using `/api/invoices/{id}/send-sunat`.
+  </Step>
+  
+  <Step title="Download Documents">
+    Download XML, CDR, and PDF using the respective endpoints.
+  </Step>
+</Steps>
+
+### Complete Request Example
+
+<CodeGroup>
+
+```json Standard Invoice (Gravado - IGV 18%)
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "F001",
+  "fecha_emision": "2024-03-15",
+  "fecha_vencimiento": "2024-04-15",
+  "moneda": "PEN",
+  "tipo_operacion": "0101",
+  "forma_pago_tipo": "Credito",
+  "forma_pago_cuotas": [
+    {
+      "moneda": "PEN",
+      "monto": 590.00,
+      "fecha_pago": "2024-04-15"
+    }
+  ],
+  "client": {
+    "tipo_documento": "6",
+    "numero_documento": "20123456789",
+    "razon_social": "EMPRESA CLIENTE SAC",
+    "nombre_comercial": "Cliente Comercial",
+    "direccion": "Av. Los Alamos 123",
+    "ubigeo": "150101",
+    "distrito": "Lima",
+    "provincia": "Lima",
+    "departamento": "Lima",
+    "telefono": "01-1234567",
+    "email": "cliente@empresa.com"
+  },
+  "detalles": [
+    {
+      "codigo": "PROD001",
+      "descripcion": "Laptop HP ProBook 450 G8",
+      "unidad": "NIU",
+      "cantidad": 2,
+      "mto_valor_unitario": 2500.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10",
+      "codigo_producto_sunat": "43211500"
+    },
+    {
+      "codigo": "SERV001",
+      "descripcion": "Instalación y configuración",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 500.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+```json Export Invoice (Tipo 0200)
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "F001",
+  "fecha_emision": "2024-03-15",
+  "moneda": "USD",
+  "tipo_operacion": "0200",
+  "forma_pago_tipo": "Contado",
+  "client": {
+    "tipo_documento": "6",
+    "numero_documento": "20987654321",
+    "razon_social": "EXPORT CLIENT CORP",
+    "direccion": "Miami, FL 33101",
+    "email": "export@client.com"
+  },
+  "detalles": [
+    {
+      "codigo": "EXP001",
+      "descripcion": "Peruvian Coffee Premium Grade",
+      "unidad": "KGM",
+      "cantidad": 1000,
+      "mto_valor_unitario": 8.50,
+      "tip_afe_igv": "40"
+    }
+  ]
+}
+```
+
+```json Invoice with Detraction
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "F001",
+  "fecha_emision": "2024-03-15",
+  "moneda": "PEN",
+  "tipo_operacion": "0101",
+  "forma_pago_tipo": "Contado",
+  "client": {
+    "tipo_documento": "6",
+    "numero_documento": "20456789123",
+    "razon_social": "CONSTRUCCIONES PERU SAC",
+    "direccion": "Jr. Las Flores 456"
+  },
+  "detalles": [
+    {
+      "codigo": "SERV-CONST",
+      "descripcion": "Servicios de construcción",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 10000.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ],
+  "detraccion": {
+    "codigo_bien_servicio": "027",
+    "porcentaje": 4,
+    "monto": 472.00,
+    "codigo_medio_pago": "001",
+    "cuenta_banco": "00000000000"
+  }
+}
+```
+
+```bash cURL Example
+curl -X POST https://api.example.com/api/invoices \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "company_id": 1,
+    "branch_id": 1,
+    "serie": "F001",
+    "fecha_emision": "2024-03-15",
+    "moneda": "PEN",
+    "forma_pago_tipo": "Contado",
+    "client": {
+      "tipo_documento": "6",
+      "numero_documento": "20123456789",
+      "razon_social": "EMPRESA CLIENTE SAC"
+    },
+    "detalles": [{
+      "codigo": "PROD001",
+      "descripcion": "Producto",
+      "unidad": "NIU",
+      "cantidad": 1,
+      "mto_valor_unitario": 100.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }]
+  }'
+```
+
+</CodeGroup>
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "company_id": 1,
+    "branch_id": 1,
+    "client_id": 45,
+    "tipo_documento": "01",
+    "serie": "F001",
+    "correlativo": "00000123",
+    "numero_completo": "F001-00000123",
+    "fecha_emision": "2024-03-15",
+    "moneda": "PEN",
+    "mto_oper_gravadas": 5000.00,
+    "mto_igv": 900.00,
+    "mto_imp_venta": 5900.00,
+    "estado_sunat": "PENDIENTE",
+    "company": { ... },
+    "branch": { ... },
+    "client": { ... }
+  },
+  "message": "Factura creada correctamente"
+}
+```
+
+## Required Fields
+
+<ParamField path="company_id" type="integer" required>
+  ID of the company issuing the invoice
+</ParamField>
+
+<ParamField path="branch_id" type="integer" required>
+  ID of the branch (must belong to the company)
+</ParamField>
+
+<ParamField path="serie" type="string" required>
+  Invoice series (max 4 characters, e.g., "F001")
+</ParamField>
+
+<ParamField path="fecha_emision" type="date" required>
+  Issue date in YYYY-MM-DD format
+</ParamField>
+
+<ParamField path="moneda" type="string" required>
+  Currency code: `PEN` (Soles) or `USD` (Dollars)
+</ParamField>
+
+<ParamField path="tipo_operacion" type="string" default="0101">
+  Operation type:
+  - `0101`: Internal sale
+  - `0200`: Export
+  - `0401`: Non-domiciled sale
+</ParamField>
+
+<ParamField path="forma_pago_tipo" type="string" required>
+  Payment type: `Contado` (Cash) or `Credito` (Credit)
+</ParamField>
+
+### Client Object
+
+<ParamField path="client.tipo_documento" type="string" required>
+  Document type:
+  - `6`: RUC (required for invoices)
+  - `4`: Carnet de Extranjería
+  - `1`: DNI (only for amounts < 700 PEN)
+</ParamField>
+
+<ParamField path="client.numero_documento" type="string" required>
+  Client's document number (11 digits for RUC)
+</ParamField>
+
+<ParamField path="client.razon_social" type="string" required>
+  Client's legal name
+</ParamField>
+
+### Details Array
+
+<ParamField path="detalles[].codigo" type="string" required>
+  Product/service code
+</ParamField>
+
+<ParamField path="detalles[].descripcion" type="string" required>
+  Item description (max 500 characters)
+</ParamField>
+
+<ParamField path="detalles[].unidad" type="string" required>
+  Unit of measure (SUNAT catalog 03):
+  - `NIU`: Units
+  - `ZZ`: Service
+  - `KGM`: Kilograms
+</ParamField>
+
+<ParamField path="detalles[].cantidad" type="number" required>
+  Quantity (minimum 0.001)
+</ParamField>
+
+<ParamField path="detalles[].mto_valor_unitario" type="number" required>
+  Unit value (without taxes)
+</ParamField>
+
+<ParamField path="detalles[].tip_afe_igv" type="string" required>
+  Tax affectation type:
+  - `10`: Taxable - IGV
+  - `20`: Exempt
+  - `30`: Unaffected
+  - `40`: Export
+</ParamField>
+
+<ParamField path="detalles[].porcentaje_igv" type="number" default="18">
+  IGV percentage (usually 18%)
+</ParamField>
+
+## Sending to SUNAT
+
+After creating an invoice, send it to SUNAT for validation:
+
+```bash
+curl -X POST https://api.example.com/api/invoices/123/send-sunat \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "numero_completo": "F001-00000123",
+    "estado_sunat": "ACEPTADO",
+    "xml_path": "storage/companies/1/invoices/xml/...",
+    "cdr_path": "storage/companies/1/invoices/cdr/...",
+    "respuesta_sunat": {
+      "id": "F001-00000123",
+      "code": "0",
+      "description": "La Factura numero F001-00000123, ha sido aceptada"
+    }
+  },
+  "message": "Factura enviada correctamente a SUNAT"
+}
+```
+
+### Error Response
+
+```json
+{
+  "success": false,
+  "data": {
+    "id": 123,
+    "estado_sunat": "RECHAZADO"
+  },
+  "message": "Error al enviar a SUNAT: El RUC del cliente no existe",
+  "error_code": "2324"
+}
+```
+
+<Note>
+The API automatically generates the correlative number for each series. The invoice totals (IGV, subtotals) are calculated automatically from the details.
+</Note>
+
+## Downloading Documents
+
+### Download XML
+
+```bash
+curl -X GET https://api.example.com/api/invoices/123/download-xml \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o invoice.xml
+```
+
+### Download CDR (SUNAT Response)
+
+```bash
+curl -X GET https://api.example.com/api/invoices/123/download-cdr \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o R-F001-00000123.zip
+```
+
+### Download PDF
+
+```bash
+curl -X GET https://api.example.com/api/invoices/123/download-pdf?format=A4 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o invoice.pdf
+```
+
+<Note>
+Available PDF formats: `A4`, `A5`, `80mm`, `ticket`
+</Note>
+
+## Advanced Features
+
+### Credit Payment with Installments
+
+```json
+{
+  "forma_pago_tipo": "Credito",
+  "forma_pago_cuotas": [
+    {
+      "moneda": "PEN",
+      "monto": 2000.00,
+      "fecha_pago": "2024-04-15"
+    },
+    {
+      "moneda": "PEN",
+      "monto": 2000.00,
+      "fecha_pago": "2024-05-15"
+    },
+    {
+      "moneda": "PEN",
+      "monto": 1900.00,
+      "fecha_pago": "2024-06-15"
+    }
+  ]
+}
+```
+
+### Invoice with Perception
+
+```json
+{
+  "percepcion": {
+    "cod_regimen": "01",
+    "tasa": 2.00,
+    "monto": 118.00,
+    "monto_base": 5900.00,
+    "monto_total": 6018.00
+  }
+}
+```
+
+### Related Documents
+
+```json
+{
+  "guias": [
+    {
+      "tipo_doc": "09",
+      "nro_doc": "T001-00000456"
+    }
+  ],
+  "documentos_relacionados": [
+    {
+      "tipo_doc": "01",
+      "nro_doc": "F001-00000100"
+    }
+  ]
+}
+```
+
+## Querying Invoices
+
+List invoices with filters:
+
+```bash
+curl -X GET "https://api.example.com/api/invoices?company_id=1&estado_sunat=ACEPTADO&fecha_desde=2024-03-01&fecha_hasta=2024-03-31" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Query Parameters
+
+- `company_id`: Filter by company
+- `branch_id`: Filter by branch
+- `estado_sunat`: Filter by status (`PENDIENTE`, `ACEPTADO`, `RECHAZADO`)
+- `fecha_desde`: Start date (YYYY-MM-DD)
+- `fecha_hasta`: End date (YYYY-MM-DD)
+- `per_page`: Items per page (default: 15)
+
+## Tax Affectation Types
+
+<Warning>
+The `tip_afe_igv` field is critical for correct tax calculation.
+</Warning>
+
+| Code | Description | IGV |
+|------|-------------|-----|
+| `10` | Taxable - IGV | Yes (18%) |
+| `20` | Exempt | No |
+| `30` | Unaffected | No |
+| `40` | Export | No |
+| `11` | Taxable - Free transfer | No (but calculated for reference) |
+| `17` | Taxable - IVAP (rice) | Yes (4%) |
+
+## Implementation Notes
+
+The invoice creation process from `app/Http/Controllers/Api/InvoiceController.php:71-92` and `app/Services/DocumentService.php:34-114`:
+
+1. Validates company and branch relationship
+2. Creates or retrieves client record
+3. Generates automatic correlative number
+4. Processes details based on operation type (export vs. domestic)
+5. Calculates all totals automatically
+6. Generates standard legends
+7. Stores invoice in database with status `PENDIENTE`
+
+<Note>
+For export operations (`tipo_operacion: "0200"`), the system automatically sets `tip_afe_igv: "40"` and calculates with 0% IGV.
+</Note>
+
+## Common Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| Branch doesn't belong to company | `branch_id` doesn't match `company_id` | Verify branch belongs to the company |
+| Invalid RUC | Client RUC doesn't exist in SUNAT | Verify RUC with SUNAT first |
+| Invalid series | Series not configured for branch | Configure series in branch settings |
+| Document already accepted | Trying to resend accepted invoice | Only pending invoices can be sent |
+
+## Best Practices
+
+1. **Always validate client data** before creating invoices
+2. **Use consistent series** for each document type and branch
+3. **Store correlative numbers** safely to avoid duplicates
+4. **Handle SUNAT errors gracefully** with proper error codes
+5. **Generate PDF after SUNAT acceptance** for better QR code data
+6. **Keep XML and CDR files** for auditing purposes
+
+## Next Steps
+
+<Card title="Credit Notes" icon="file-invoice" href="/guides/credit-notes">
+  Learn how to create credit notes for invoice corrections
+</Card>
+
+<Card title="PDF Generation" icon="file-pdf" href="/guides/pdf-generation">
+  Customize invoice PDF templates and formats
+</Card>

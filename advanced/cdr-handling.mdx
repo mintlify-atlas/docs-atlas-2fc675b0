@@ -1,0 +1,663 @@
+---
+title: "CDR Processing"
+description: "Understanding, processing, and validating SUNAT's Constancia de Recepción (CDR)"
+---
+
+## What is a CDR?
+
+The **CDR (Constancia de Recepción)** is SUNAT's official digital response that confirms receipt and validation of your electronic document. It serves as **legal proof** that SUNAT accepted your invoice, note, or other electronic document.
+
+<Info>
+The CDR is a **digitally signed XML file** delivered in a ZIP archive. It contains SUNAT's validation results, acceptance status, and any observations or warnings.
+</Info>
+
+## CDR Structure
+
+### ZIP Archive
+
+SUNAT returns CDRs as ZIP files with this naming convention:
+
+```
+R-{RUC}-{TipoDoc}-{Serie}-{Correlativo}.zip
+
+Example: R-20123456789-01-F001-00000123.zip
+```
+
+### CDR XML Content
+
+Inside the ZIP, the XML follows this structure:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<ApplicationResponse xmlns="urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2"
+                     xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+                     xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+                     xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+    
+    <!-- CDR Identifier -->
+    <cbc:ID>20123456789-01-F001-00000123</cbc:ID>
+    <cbc:IssueDate>2025-09-02</cbc:IssueDate>
+    <cbc:IssueTime>10:35:12</cbc:IssueTime>
+    
+    <!-- Document Reference -->
+    <cac:DocumentResponse>
+        <cac:Response>
+            <cbc:ResponseCode>0</cbc:ResponseCode>
+            <cbc:Description>La Factura numero F001-00000123, ha sido aceptada</cbc:Description>
+        </cac:Response>
+        
+        <cac:DocumentReference>
+            <cbc:ID>F001-00000123</cbc:ID>
+            <cbc:DocumentTypeCode>01</cbc:DocumentTypeCode>
+            <cac:IssuerParty>
+                <cac:PartyIdentification>
+                    <cbc:ID schemeID="6">20123456789</cbc:ID>
+                </cac:PartyIdentification>
+            </cac:IssuerParty>
+        </cac:DocumentReference>
+    </cac:DocumentResponse>
+    
+    <!-- Digital Signature (SUNAT) -->
+    <ds:Signature>
+        <!-- SUNAT's digital signature -->
+    </ds:Signature>
+    
+</ApplicationResponse>
+```
+
+## Processing CDR Responses
+
+### Saving CDR Files
+
+<CodeGroup>
+```php FileService.php:18-24
+public function saveCdr($document, string $cdrContent): string
+{
+    $this->ensureDirectoryExists($document, 'zip');
+    $path = $this->generatePath($document, 'zip');
+    Storage::disk('public')->put($path, $cdrContent);
+    return $path;
+}
+```
+
+```php FileService.php:34-62
+protected function generatePath($document, string $extension, string $format = 'A4'): string
+{
+    $date = Carbon::parse($document->fecha_emision);
+    $dateFolder = $date->format('dmY'); // Format: 02092025
+    
+    $fileName = $document->numero_completo;
+    
+    // Get document type
+    $tipoComprobante = $this->getDocumentTypeName($document);
+    
+    // Determine file type (xml, cdr or pdf)
+    $tipoArchivo = $extension === 'zip' ? 'cdr' : $extension;
+    
+    // Create structure: DOCUMENT_TYPE/FILE_TYPE/DDMMYYYY/
+    $directory = "{$tipoComprobante}/{$tipoArchivo}/{$dateFolder}";
+    
+    // Prefix based on file type
+    $prefix = '';
+    if ($extension === 'zip') {
+        $prefix = 'R-'; // CDR
+    }
+    
+    // For PDFs, add format to filename if not A4
+    if ($extension === 'pdf' && $format !== 'A4') {
+        $fileName .= "_{$format}";
+    }
+    
+    return "{$directory}/{$prefix}{$fileName}.{$extension}";
+}
+```
+</CodeGroup>
+
+### CDR Storage Structure
+
+Example directory structure:
+
+```
+storage/app/public/
+├── facturas/
+│   ├── xml/
+│   │   └── 02092025/
+│   │       └── F001-00000123.xml
+│   ├── cdr/
+│   │   └── 02092025/
+│   │       └── R-F001-00000123.zip
+│   └── pdf/
+│       └── 02092025/
+│           └── F001-00000123.pdf
+├── boletas/
+│   ├── xml/
+│   ├── cdr/
+│   └── pdf/
+└── notas-credito/
+    ├── xml/
+    ├── cdr/
+    └── pdf/
+```
+
+## Extracting CDR Information
+
+### Parsing CDR Response
+
+<CodeGroup>
+```php DocumentService.php:216-228
+if ($result['success'] && $result['cdr_zip']) {
+    $cdrPath = $this->fileService->saveCdr($document, $result['cdr_zip']);
+    $document->cdr_path = $cdrPath;
+    
+    $document->estado_sunat = 'ACEPTADO';
+    $document->respuesta_sunat = json_encode([
+        'id' => $result['cdr_response']->getId(),
+        'code' => $result['cdr_response']->getCode(),
+        'description' => $result['cdr_response']->getDescription(),
+        'notes' => $result['cdr_response']->getNotes(),
+    ]);
+    
+    // Get hash from XML
+    $xmlSigned = $greenterService->getXmlSigned($greenterDocument);
+    if ($xmlSigned) {
+        $document->codigo_hash = $this->extractHashFromXml($xmlSigned);
+    }
+}
+```
+</CodeGroup>
+
+### CDR Response Object
+
+The `cdr_response` object provides these methods:
+
+<ResponseField name="getId()" type="string">
+  CDR unique identifier (format: `{RUC}-{TipoDoc}-{Serie}-{Correlativo}`)
+</ResponseField>
+
+<ResponseField name="getCode()" type="string">
+  Response code:
+  - `0` = Accepted
+  - `98` = Accepted with observations
+  - Other codes indicate rejection
+</ResponseField>
+
+<ResponseField name="getDescription()" type="string">
+  Human-readable response message from SUNAT
+</ResponseField>
+
+<ResponseField name="getNotes()" type="array">
+  Array of observation or warning messages (even when code is 0)
+</ResponseField>
+
+## CDR Response Codes
+
+### Success Codes
+
+<AccordionGroup>
+<Accordion title="Code 0 - Accepted">
+**Meaning:** Document was accepted without issues.
+
+**Action:** Store CDR, update document status to `ACEPTADO`, and proceed normally.
+
+```json
+{
+  "code": "0",
+  "description": "La Factura numero F001-00000123, ha sido aceptada",
+  "notes": []
+}
+```
+</Accordion>
+
+<Accordion title="Code 98 - Accepted with Observations">
+**Meaning:** Document was accepted but SUNAT found minor issues (non-blocking).
+
+**Action:** Store CDR, update status to `ACEPTADO`, but **review notes** for warnings.
+
+```json
+{
+  "code": "98",
+  "description": "La Factura ha sido aceptada con observaciones",
+  "notes": [
+    "El campo [cbc:DocumentCurrencyCode] tiene un valor diferente al esperado",
+    "El RUC del receptor no está activo en SUNAT"
+  ]
+}
+```
+
+<Warning>
+While code 98 documents are legally valid, you should investigate and fix the issues noted to avoid future problems.
+</Warning>
+</Accordion>
+</AccordionGroup>
+
+### Rejection Codes
+
+<AccordionGroup>
+<Accordion title="Code 2000-2999: Schema and Validation Errors">
+| Code | Description | Solution |
+|------|-------------|----------|
+| **2324** | Invalid RUC | Verify company RUC is correct and registered |
+| **2335** | Duplicate document | Document with same series-correlative already exists |
+| **2336** | Invalid correlative | Correlative must be sequential |
+| **2800** | Invalid XML schema | Validate against UBL 2.1 XSD |
+| **2801** | Invalid signature | Check certificate validity and signing process |
+| **2802** | Certificate expired | Renew digital certificate |
+</Accordion>
+
+<Accordion title="Code 1000-1999: Business Logic Errors">
+| Code | Description | Solution |
+|------|-------------|----------|
+| **1032** | RUC suspended | Company has tax irregularities - resolve with SUNAT |
+| **1033** | RUC not authorized | Company not authorized for electronic invoicing |
+| **1034** | Invalid client RUC | Client RUC is invalid or doesn't exist |
+</Accordion>
+
+<Accordion title="Code 3000-3999: Content Errors">
+| Code | Description | Solution |
+|------|-------------|----------|
+| **3000** | Malformed XML | Check XML structure and encoding |
+| **3100** | Missing required field | Add all mandatory UBL elements |
+| **3200** | Invalid tax calculation | Verify IGV, ISC, ICBPER calculations |
+</Accordion>
+</AccordionGroup>
+
+## Handling Rejection
+
+### Error Response Processing
+
+<CodeGroup>
+```php DocumentService.php:234-259
+else {
+    $document->estado_sunat = 'RECHAZADO';
+    
+    // Handle different error types
+    $errorCode = 'UNKNOWN';
+    $errorMessage = 'Unknown error';
+    
+    if (is_object($result['error'])) {
+        if (method_exists($result['error'], 'getCode')) {
+            $errorCode = $result['error']->getCode();
+        } elseif (property_exists($result['error'], 'code')) {
+            $errorCode = $result['error']->code;
+        }
+        
+        if (method_exists($result['error'], 'getMessage')) {
+            $errorMessage = $result['error']->getMessage();
+        } elseif (property_exists($result['error'], 'message')) {
+            $errorMessage = $result['error']->message;
+        }
+    }
+    
+    $document->respuesta_sunat = json_encode([
+        'code' => $errorCode,
+        'message' => $errorMessage,
+    ]);
+}
+```
+</CodeGroup>
+
+### Retry Logic
+
+<CodeGroup>
+```php Example Retry Implementation
+public function retryRejectedDocument($document, int $maxRetries = 3): array
+{
+    $attempt = 0;
+    $lastError = null;
+    
+    while ($attempt < $maxRetries) {
+        $attempt++;
+        
+        Log::info("Retry attempt {$attempt}/{$maxRetries}", [
+            'document_id' => $document->id,
+            'serie_correlativo' => $document->numero_completo
+        ]);
+        
+        // Re-send to SUNAT
+        $result = $this->sendToSunat($document, 'invoice');
+        
+        if ($result['success']) {
+            return [
+                'success' => true,
+                'message' => "Document accepted on attempt {$attempt}",
+                'attempts' => $attempt
+            ];
+        }
+        
+        $lastError = $result['error'];
+        
+        // Check if error is retryable
+        $errorCode = $lastError->code ?? 'UNKNOWN';
+        if (!$this->isRetryableError($errorCode)) {
+            break; // Don't retry non-retryable errors
+        }
+        
+        // Exponential backoff
+        if ($attempt < $maxRetries) {
+            sleep(pow(2, $attempt)); // 2, 4, 8 seconds
+        }
+    }
+    
+    return [
+        'success' => false,
+        'message' => "Document rejected after {$attempt} attempts",
+        'error' => $lastError,
+        'attempts' => $attempt
+    ];
+}
+
+protected function isRetryableError(string $code): bool
+{
+    // Network errors and temporary issues
+    $retryableCodes = [
+        'SOAP-ERROR', // Network/connection errors
+        'TIMEOUT',    // Request timeout
+        '1004',       // Service temporarily unavailable
+        '1005',       // Service overloaded
+    ];
+    
+    return in_array($code, $retryableCodes);
+}
+```
+</CodeGroup>
+
+## CDR Validation
+
+### Verifying CDR Signature
+
+<Note>
+SUNAT signs all CDRs with their own digital certificate. You can validate the signature to ensure authenticity.
+</Note>
+
+<CodeGroup>
+```php Example CDR Signature Validation
+use RobRichards\XMLSecLibs\XMLSecurityDSig;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
+
+public function validateCdrSignature(string $cdrXml): bool
+{
+    try {
+        $doc = new \DOMDocument();
+        $doc->loadXML($cdrXml);
+        
+        $objXMLSecDSig = new XMLSecurityDSig();
+        $objDSig = $objXMLSecDSig->locateSignature($doc);
+        
+        if (!$objDSig) {
+            throw new \Exception('Signature not found in CDR');
+        }
+        
+        $objXMLSecDSig->canonicalizeSignedInfo();
+        $objKey = $objXMLSecDSig->locateKey();
+        
+        if (!$objKey) {
+            throw new \Exception('Key not found in signature');
+        }
+        
+        // Load the public key from certificate
+        $objKey->loadKey($objXMLSecDSig->getCertificate());
+        
+        // Verify signature
+        $isValid = $objXMLSecDSig->verify($objKey);
+        
+        Log::info('CDR signature validation', [
+            'is_valid' => $isValid
+        ]);
+        
+        return $isValid;
+        
+    } catch (\Exception $e) {
+        Log::error('CDR signature validation failed', [
+            'error' => $e->getMessage()
+        ]);
+        return false;
+    }
+}
+```
+</CodeGroup>
+
+## Querying Document Status
+
+You can query the status of previously sent documents:
+
+<CodeGroup>
+```php ConsultaCpeService.php:36-60
+public function consultarComprobante($documento): array
+{
+    try {
+        // Get valid token
+        $token = $this->obtenerTokenValido();
+        
+        if (!$token) {
+            return [
+                'success' => false,
+                'message' => 'Could not obtain authentication token',
+                'data' => null
+            ];
+        }
+
+        // Configure query API
+        $config = Configuration::getDefaultConfiguration()
+            ->setAccessToken($token)
+            ->setHost($this->getApiHost());
+
+        $apiInstance = new ConsultaApi(new Client(), $config);
+
+        // Create query filter
+        $cpeFilter = $this->crearFiltroCpe($documento);
+        
+        // Perform query
+        $result = $apiInstance->consultarCpe($this->company->ruc, $cpeFilter);
+        // ...
+    }
+}
+```
+
+```php ConsultaCpeService.php:259-272
+protected function crearFiltroCpe($documento): CpeFilter
+{
+    $fechaEmision = date('d/m/Y', strtotime($documento->fecha_emision));
+    $monto = round(floatval($documento->mto_imp_venta), 2);
+
+    return (new CpeFilter())
+        ->setNumRuc($this->company->ruc)
+        ->setCodComp($documento->tipo_documento)
+        ->setNumeroSerie($documento->serie)
+        ->setNumero(intval($documento->correlativo))
+        ->setFechaEmision($fechaEmision)
+        ->setMonto($monto);
+}
+```
+</CodeGroup>
+
+### Status Query Response
+
+<ResponseField name="estadoCpe" type="string">
+  Document status code:
+  - `0` = Does not exist
+  - `1` = Accepted
+  - `2` = Annulled
+  - `3` = Authorized
+  - `-1` = Query error
+</ResponseField>
+
+<ResponseField name="estado_ruc" type="string">
+  Issuer RUC status (e.g., "ACTIVO", "SUSPENDIDO")
+</ResponseField>
+
+<ResponseField name="condicion_domicilio" type="string">
+  Tax domicile condition (e.g., "HABIDO", "NO HABIDO")
+</ResponseField>
+
+## CDR Download Endpoints
+
+<CodeGroup>
+```php FileService.php:141-151
+public function downloadCdr($document)
+{
+    if (!$document->cdr_path || !Storage::disk('public')->exists($document->cdr_path)) {
+        return null;
+    }
+    
+    return Storage::disk('public')->download(
+        $document->cdr_path,
+        'R-' . $document->numero_completo . '.zip'
+    );
+}
+```
+
+```php Example API Endpoint
+Route::get('/invoices/{invoice}/cdr', function (Invoice $invoice) {
+    $fileService = app(FileService::class);
+    
+    $download = $fileService->downloadCdr($invoice);
+    
+    if (!$download) {
+        return response()->json([
+            'success' => false,
+            'message' => 'CDR not available'
+        ], 404);
+    }
+    
+    return $download;
+})->name('invoices.cdr.download');
+```
+</CodeGroup>
+
+## Database Schema
+
+Storing CDR information:
+
+<CodeGroup>
+```php Invoice Model Fields
+protected $fillable = [
+    // ... other fields
+    'cdr_path',           // Path to CDR ZIP file
+    'estado_sunat',       // SUNAT status: PENDIENTE, ACEPTADO, RECHAZADO
+    'respuesta_sunat',    // JSON: {code, description, notes}
+    'codigo_hash',        // Document hash from signature
+    'consulta_cpe_estado',    // Status from query
+    'consulta_cpe_respuesta', // Full query response (JSON)
+    'consulta_cpe_fecha',     // Last query timestamp
+];
+```
+
+```sql Example Query
+SELECT 
+    id,
+    numero_completo,
+    estado_sunat,
+    cdr_path,
+    respuesta_sunat->>'$.code' as codigo_respuesta,
+    respuesta_sunat->>'$.description' as descripcion,
+    codigo_hash,
+    created_at
+FROM invoices
+WHERE estado_sunat = 'ACEPTADO'
+  AND fecha_emision >= '2025-09-01'
+ORDER BY created_at DESC;
+```
+</CodeGroup>
+
+## Best Practices
+
+<AccordionGroup>
+<Accordion title="Storage and Retention">
+1. **Never delete CDRs** - They are legal proof of acceptance (required for 5+ years)
+2. **Backup regularly** - Store CDRs in multiple locations
+3. **Archive old CDRs** - Move older CDRs to cold storage after 1-2 years
+4. **Verify integrity** - Periodically check CDR files are not corrupted
+5. **Document metadata** - Store response codes and descriptions in database
+</Accordion>
+
+<Accordion title="Error Handling">
+1. **Parse error codes** - Different codes require different actions
+2. **Implement retry logic** - Only for transient errors (network, timeout)
+3. **Log all attempts** - Track submission history for debugging
+4. **Alert on patterns** - Monitor rejection rates and common errors
+5. **Provide user feedback** - Show clear, actionable error messages
+</Accordion>
+
+<Accordion title="Performance">
+1. **Async processing** - Process CDRs in background jobs
+2. **Batch queries** - Query multiple document statuses together
+3. **Cache results** - Cache query results temporarily
+4. **Optimize storage** - Compress old CDR archives
+5. **Index properly** - Add database indexes on estado_sunat, fecha_emision
+</Accordion>
+
+<Accordion title="Compliance">
+1. **Validate signatures** - Verify SUNAT's signature on CDRs
+2. **Audit trail** - Log all CDR processing activities
+3. **Status tracking** - Maintain document lifecycle status
+4. **Reconciliation** - Periodically reconcile local status with SUNAT
+5. **Documentation** - Keep records of rejection reasons and resolutions
+</Accordion>
+</AccordionGroup>
+
+## Monitoring and Alerting
+
+<CodeGroup>
+```php Example Monitoring Implementation
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+
+class CdrMonitoringService
+{
+    public function trackRejection(string $errorCode, string $documentType): void
+    {
+        $key = "cdr_rejection_{$documentType}_{$errorCode}_" . date('Y-m-d');
+        Cache::increment($key, 1);
+        Cache::expire($key, 86400 * 7); // Keep for 7 days
+        
+        // Alert if rejection rate is high
+        $count = Cache::get($key, 0);
+        if ($count >= 10) {
+            $this->alertHighRejectionRate($errorCode, $documentType, $count);
+        }
+    }
+    
+    public function getRejectionStats(string $documentType, int $days = 7): array
+    {
+        $stats = [];
+        
+        for ($i = 0; $i < $days; $i++) {
+            $date = date('Y-m-d', strtotime("-{$i} days"));
+            $stats[$date] = $this->getDayStats($documentType, $date);
+        }
+        
+        return $stats;
+    }
+    
+    protected function alertHighRejectionRate(string $code, string $type, int $count): void
+    {
+        Log::alert('High CDR rejection rate detected', [
+            'error_code' => $code,
+            'document_type' => $type,
+            'count_today' => $count,
+            'threshold' => 10
+        ]);
+        
+        // Send notification (email, Slack, etc.)
+        // Notification::send(...);
+    }
+}
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Daily Summaries" icon="calendar-days" href="/advanced/daily-summaries">
+    Learn about sending boletas via daily summaries
+  </Card>
+  <Card title="Voided Documents" icon="ban" href="/advanced/voided-documents">
+    Annul documents with comunicaciones de baja
+  </Card>
+  <Card title="SUNAT Integration" icon="plug" href="/advanced/sunat-integration">
+    Understand SUNAT endpoints and communication
+  </Card>
+  <Card title="XML Signing" icon="file-signature" href="/advanced/xml-signing">
+    Deep dive into digital signatures
+  </Card>
+</CardGroup>

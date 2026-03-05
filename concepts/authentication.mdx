@@ -1,0 +1,612 @@
+---
+title: 'Authentication'
+description: 'Laravel Sanctum authentication, token management, and user roles in the SUNAT API'
+---
+
+## Overview
+
+The SUNAT Electronic Invoicing API uses **Laravel Sanctum** for API token authentication. Sanctum provides a lightweight authentication system for SPAs, mobile applications, and simple token-based APIs.
+
+<Info>
+  Sanctum tokens are stored in the `personal_access_tokens` table and can have specific abilities (permissions) assigned to them.
+</Info>
+
+## Authentication Flow
+
+### System Initialization
+
+Before any users can authenticate, the system must be initialized with a super admin account.
+
+<Steps>
+  <Step title="Check System Status">
+    ```bash
+    GET /api/auth/system-info
+    ```
+    
+    Returns whether the system is initialized and ready for use.
+    
+    ```json
+    {
+      "system_initialized": false,
+      "user_count": 0,
+      "roles_count": 0,
+      "database_connected": true
+    }
+    ```
+  </Step>
+  
+  <Step title="Initialize System">
+    ```bash
+    POST /api/auth/initialize
+    ```
+    
+    Creates the first super admin user and seeds roles/permissions.
+    
+    ```json
+    {
+      "name": "Admin User",
+      "email": "admin@company.com",
+      "password": "SecurePassword123!"
+    }
+    ```
+    
+    **Response:**
+    ```json
+    {
+      "message": "Sistema inicializado exitosamente",
+      "user": {
+        "id": 1,
+        "name": "Admin User",
+        "email": "admin@company.com",
+        "role": "Super Administrador"
+      },
+      "access_token": "1|sunat_a1b2c3...",
+      "token_type": "Bearer"
+    }
+    ```
+  </Step>
+</Steps>
+
+### User Login
+
+**Endpoint:** `POST /api/auth/login`
+
+**Request:**
+```json
+{
+  "email": "user@company.com",
+  "password": "password123"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Login exitoso",
+  "user": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "user@company.com",
+    "role": "Administrator",
+    "company_id": 5,
+    "permissions": ["invoices.create", "invoices.view", "*"]
+  },
+  "access_token": "2|sunat_xyz123...",
+  "token_type": "Bearer"
+}
+```
+
+**Implementation:** `app/Http/Controllers/Api/AuthController.php:80`
+
+```php app/Http/Controllers/Api/AuthController.php
+public function login(Request $request)
+{
+    $request->validate([
+        'email' => 'required|email',
+        'password' => 'required',
+    ]);
+
+    $user = User::where('email', $request->email)->first();
+
+    if (!$user || !Hash::check($request->password, $user->password)) {
+        return response()->json([
+            'message' => 'Credenciales incorrectas',
+            'status' => 'error'
+        ], 401);
+    }
+
+    // Check if user is active
+    if (!$user->active) {
+        return response()->json([
+            'message' => 'Usuario inactivo',
+        ], 401);
+    }
+
+    // Check if user is locked
+    if ($user->isLocked()) {
+        return response()->json([
+            'message' => 'Usuario bloqueado',
+        ], 401);
+    }
+
+    // Record successful login
+    $user->recordSuccessfulLogin($request->ip());
+
+    // Create token with user's permissions
+    $abilities = $user->role ? $user->role->getAllPermissions() : ['*'];
+    $token = $user->createToken('API_ACCESS_TOKEN', $abilities)->plainTextToken;
+
+    return response()->json([
+        'user' => [...],
+        'access_token' => $token,
+        'token_type' => 'Bearer'
+    ]);
+}
+```
+
+### Token Usage
+
+Include the token in the `Authorization` header for all authenticated requests:
+
+```bash
+curl -X GET https://api.example.com/api/invoices \
+  -H "Authorization: Bearer 2|sunat_xyz123..."
+```
+
+### Logout
+
+**Endpoint:** `POST /api/auth/logout`
+
+Revokes the current access token.
+
+```php
+public function logout(Request $request)
+{
+    $request->user()->currentAccessToken()->delete();
+    
+    return response()->json([
+        'message' => 'Logout exitoso'
+    ]);
+}
+```
+
+## User Model
+
+**Location:** `app/Models/User.php`
+
+### User Attributes
+
+```php app/Models/User.php
+protected $fillable = [
+    'name',
+    'email',
+    'password',
+    'role_id',              // Foreign key to roles table
+    'company_id',           // Foreign key to companies table
+    'user_type',            // 'system', 'user', 'api_client'
+    'allowed_ips',          // Array of allowed IP addresses
+    'permissions',          // Additional user-specific permissions
+    'last_login_at',        // Timestamp of last login
+    'last_login_ip',        // IP address of last login
+    'failed_login_attempts',// Counter for security
+    'locked_until',         // Temporary account lock
+    'active',               // Boolean: is user active?
+    'force_password_change',// Require password change on next login
+];
+```
+
+### User Types
+
+| Type | Description |
+|------|-------------|
+| `system` | Super admin and system administrators |
+| `user` | Regular company users |
+| `api_client` | Programmatic API access only |
+
+## User Roles and Permissions
+
+### Role Hierarchy
+
+**Location:** `app/Models/Role.php`
+
+```php
+Role::create([
+    'name' => 'super_admin',
+    'display_name' => 'Super Administrador',
+    'description' => 'Acceso total al sistema',
+]);
+```
+
+### Available Roles
+
+<Tabs>
+  <Tab title="Super Admin">
+    **Name:** `super_admin`
+    
+    **Permissions:** All (`*`)
+    
+    **Description:** Complete system access, can manage all companies and users.
+    
+    **Key Methods:**
+    ```php
+    // Check if user is super admin
+    if ($user->hasRole('super_admin')) {
+        // Has all permissions
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Company Admin">
+    **Name:** `admin`
+    
+    **Permissions:** 
+    - `companies.view`
+    - `companies.update`
+    - `users.create`
+    - `users.view`
+    - `invoices.*`
+    - `boletas.*`
+    
+    **Description:** Company-level administrator, can manage company settings and users within their company.
+  </Tab>
+  
+  <Tab title="Accountant">
+    **Name:** `accountant`
+    
+    **Permissions:**
+    - `invoices.*`
+    - `boletas.*`
+    - `credit-notes.*`
+    - `debit-notes.*`
+    - `reports.view`
+    
+    **Description:** Can create and manage all types of electronic documents.
+  </Tab>
+  
+  <Tab title="Operator">
+    **Name:** `operator`
+    
+    **Permissions:**
+    - `invoices.create`
+    - `invoices.view`
+    - `boletas.create`
+    - `boletas.view`
+    
+    **Description:** Basic document creation, cannot void or modify existing documents.
+  </Tab>
+</Tabs>
+
+### Permission Checking
+
+**Location:** `app/Models/User.php:93`
+
+```php app/Models/User.php
+public function hasPermission(string $permission): bool
+{
+    // Inactive users have no permissions
+    if (!$this->active) {
+        return false;
+    }
+
+    // Check if locked
+    if ($this->isLocked()) {
+        return false;
+    }
+
+    // Super admin has all permissions
+    if ($this->role && $this->role->name === 'super_admin') {
+        return true;
+    }
+
+    // Check user-specific permissions
+    if ($this->permissions && in_array($permission, $this->permissions)) {
+        return true;
+    }
+
+    // Check role permissions
+    if ($this->role && $this->role->hasPermission($permission)) {
+        return true;
+    }
+
+    return false;
+}
+```
+
+### Permission Examples
+
+```php
+// Check single permission
+if ($user->hasPermission('invoices.create')) {
+    // User can create invoices
+}
+
+// Check any of multiple permissions
+if ($user->hasAnyPermission(['invoices.create', 'boletas.create'])) {
+    // User can create invoices OR boletas
+}
+
+// Check all permissions
+if ($user->hasAllPermissions(['invoices.view', 'invoices.create'])) {
+    // User can both view AND create invoices
+}
+
+// Check role
+if ($user->hasRole('admin')) {
+    // User is an admin
+}
+```
+
+## Security Features
+
+### Account Lockout
+
+After 5 failed login attempts, accounts are locked for 30 minutes.
+
+```php app/Models/User.php:248
+public function incrementFailedLoginAttempts(): void
+{
+    $this->increment('failed_login_attempts');
+    
+    // Lock after 5 failed attempts
+    if ($this->failed_login_attempts >= 5) {
+        $this->update([
+            'locked_until' => now()->addMinutes(30)
+        ]);
+    }
+}
+```
+
+### IP Whitelisting
+
+Restrict user access to specific IP addresses or CIDR ranges.
+
+```php app/Models/User.php:209
+public function isIpAllowed(string $ip): bool
+{
+    // If no restrictions, allow all
+    if (!$this->allowed_ips) {
+        return true;
+    }
+
+    // Check exact IP match
+    if (in_array($ip, $this->allowed_ips)) {
+        return true;
+    }
+
+    // Check CIDR ranges (e.g., "192.168.1.0/24")
+    foreach ($this->allowed_ips as $allowedIp) {
+        if (str_contains($allowedIp, '/')) {
+            if ($this->ipInRange($ip, $allowedIp)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+```
+
+### Token Expiration
+
+**Configuration:** `config/sanctum.php:50`
+
+```php config/sanctum.php
+'expiration' => env('SANCTUM_EXPIRATION', 1440), // 24 hours
+
+'token_types' => [
+    'api' => [
+        'expiration' => 1440,  // 24 hours
+        'abilities' => ['*'],
+    ],
+    'web' => [
+        'expiration' => 480,   // 8 hours
+        'abilities' => ['*'],
+    ],
+    'mobile' => [
+        'expiration' => 10080, // 7 days
+        'abilities' => ['*'],
+    ],
+    'integration' => [
+        'expiration' => 43200, // 30 days
+        'abilities' => ['invoices.create', 'invoices.view'],
+    ],
+],
+```
+
+### Token Prefix
+
+Sanctum tokens are prefixed with `sunat_` for security scanning.
+
+```php
+'token_prefix' => env('SANCTUM_TOKEN_PREFIX', 'sunat_'),
+```
+
+## Company Scoping
+
+Users are scoped to their company. Super admins can access all companies.
+
+```php app/Models/User.php:195
+public function canAccessCompany(int $companyId): bool
+{
+    // Super admin can access all companies
+    if ($this->hasRole('super_admin')) {
+        return true;
+    }
+
+    // Check if it's the user's assigned company
+    return $this->company_id === $companyId;
+}
+```
+
+**Usage in Controllers:**
+
+```php
+public function index(Request $request)
+{
+    $user = $request->user();
+    
+    // Super admin sees all invoices
+    if ($user->hasRole('super_admin')) {
+        $invoices = Invoice::all();
+    } else {
+        // Regular users only see their company's invoices
+        $invoices = Invoice::where('company_id', $user->company_id)->get();
+    }
+    
+    return response()->json($invoices);
+}
+```
+
+## Creating Additional Users
+
+Only super admins can create new users.
+
+**Endpoint:** `POST /api/auth/create-user`
+
+**Request:**
+```json
+{
+  "name": "Jane Smith",
+  "email": "jane@company.com",
+  "password": "SecurePass123!",
+  "role_name": "accountant",
+  "company_id": 5,
+  "user_type": "user"
+}
+```
+
+**Implementation:** `app/Http/Controllers/Api/AuthController.php:168`
+
+```php
+public function createUser(Request $request)
+{
+    if (!$request->user()->hasRole('super_admin')) {
+        return response()->json([
+            'message' => 'No tienes permisos para crear usuarios',
+        ], 403);
+    }
+
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'email' => 'required|string|email|unique:users',
+        'password' => ['required', Password::min(8)],
+        'role_name' => 'required|string|exists:roles,name',
+        'company_id' => 'nullable|integer|exists:companies,id',
+        'user_type' => 'required|in:system,user,api_client',
+    ]);
+
+    $role = Role::where('name', $request->role_name)->first();
+
+    $user = User::create([
+        'name' => $request->name,
+        'email' => $request->email,
+        'password' => Hash::make($request->password),
+        'role_id' => $role->id,
+        'company_id' => $request->company_id,
+        'user_type' => $request->user_type,
+        'active' => true,
+    ]);
+
+    return response()->json([
+        'message' => 'Usuario creado exitosamente',
+        'user' => $user
+    ]);
+}
+```
+
+## Token Abilities
+
+Sanctum supports token-specific abilities (permissions).
+
+```php
+// Create token with specific abilities
+$token = $user->createToken('invoice-api', [
+    'invoices.create',
+    'invoices.view'
+])->plainTextToken;
+
+// Check token abilities in middleware
+Route::middleware(['auth:sanctum', 'ability:invoices.create'])
+    ->post('/api/invoices', [InvoiceController::class, 'store']);
+```
+
+## Middleware
+
+### Authentication Middleware
+
+```php
+// Require authentication
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/api/invoices', [InvoiceController::class, 'index']);
+});
+```
+
+### Ability Middleware
+
+```php
+// Require specific ability
+Route::middleware(['auth:sanctum', 'ability:invoices.create'])
+    ->post('/api/invoices', [InvoiceController::class, 'store']);
+
+// Require any of multiple abilities
+Route::middleware(['auth:sanctum', 'abilities:invoices.create,boletas.create'])
+    ->post('/api/documents', [DocumentController::class, 'store']);
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use HTTPS in Production">
+    Always use HTTPS to protect tokens in transit.
+    
+    ```env
+    SANCTUM_STATEFUL_DOMAINS=yourdomain.com
+    SESSION_SECURE_COOKIE=true
+    ```
+  </Accordion>
+  
+  <Accordion title="Rotate Tokens Regularly">
+    Implement token rotation for long-lived tokens.
+    
+    ```php
+    // Delete old token
+    $user->tokens()->delete();
+    
+    // Create new token
+    $newToken = $user->createToken('rotated-token')->plainTextToken;
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Appropriate Expiration Times">
+    Set shorter expiration for web tokens, longer for integration tokens.
+    
+    ```php
+    // Short-lived for web apps
+    $webToken = $user->createToken('web', ['*'], now()->addHours(8));
+    
+    // Long-lived for integrations
+    $apiToken = $user->createToken('integration', ['invoices.*'], now()->addDays(30));
+    ```
+  </Accordion>
+  
+  <Accordion title="Implement IP Whitelisting for API Clients">
+    For programmatic access, restrict to known IP addresses.
+    
+    ```php
+    $user->update([
+        'allowed_ips' => ['192.168.1.100', '10.0.0.0/24']
+    ]);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Certificate Setup" icon="certificate" href="/concepts/certificate-setup">
+    Configure SUNAT digital certificates
+  </Card>
+  <Card title="Environments" icon="globe" href="/concepts/environments">
+    Understand Beta vs Production environments
+  </Card>
+</CardGroup>

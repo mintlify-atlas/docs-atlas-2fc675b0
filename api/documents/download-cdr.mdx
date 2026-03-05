@@ -1,0 +1,321 @@
+---
+title: Download CDR
+api: GET /api/v1/invoices/{id}/download-cdr
+---
+
+Downloads the CDR (Constancia de Recepción) file for an invoice or boleta. The CDR is SUNAT's official receipt confirming that the electronic document was received and validated.
+
+<Note>
+This endpoint works for both invoices and boletas. Use `/api/v1/invoices/{id}/download-cdr` for invoices and `/api/v1/boletas/{id}/download-cdr` for boletas.
+</Note>
+
+## Authentication
+
+This endpoint requires authentication using a Bearer token (Sanctum).
+
+```bash
+Authorization: Bearer YOUR_API_TOKEN
+```
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The ID of the invoice or boleta whose CDR file you want to download.
+</ParamField>
+
+## Response
+
+### Success Response
+
+Returns the CDR file as a ZIP download with appropriate headers:
+
+- **Content-Type**: `application/zip`
+- **Content-Disposition**: `attachment; filename="R-{ruc}-{tipo}-{serie}-{numero}.zip"`
+
+The ZIP file contains an XML file with SUNAT's response, including:
+
+- Response code (0 = accepted)
+- Response description
+- Digest value (hash)
+- Response date and time
+- Document reference (RUC, document type, series, number)
+
+### Error Response
+
+<ResponseField name="success" type="boolean">
+  Always `false` for error responses.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message describing why the CDR couldn't be downloaded.
+</ResponseField>
+
+## Request Examples
+
+<CodeGroup>
+
+```bash cURL - Invoice
+curl -X GET https://api.example.com/api/v1/invoices/123/download-cdr \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -O -J
+```
+
+```bash cURL - Boleta
+curl -X GET https://api.example.com/api/v1/boletas/456/download-cdr \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -O -J
+```
+
+```javascript JavaScript
+// Download invoice CDR
+const response = await fetch('https://api.example.com/api/v1/invoices/123/download-cdr', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+
+if (response.ok) {
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'cdr.zip';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// Download boleta CDR
+const boletaResponse = await fetch('https://api.example.com/api/v1/boletas/456/download-cdr', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+
+if (boletaResponse.ok) {
+  const blob = await boletaResponse.blob();
+  // Handle blob...
+}
+```
+
+```php PHP
+$client = new GuzzleHttp\Client();
+
+// Download invoice CDR
+$response = $client->get('https://api.example.com/api/v1/invoices/123/download-cdr', [
+    'headers' => [
+        'Authorization' => 'Bearer YOUR_API_TOKEN',
+    ],
+    'sink' => '/path/to/save/cdr.zip'
+]);
+
+// Download boleta CDR
+$boletaResponse = $client->get('https://api.example.com/api/v1/boletas/456/download-cdr', [
+    'headers' => [
+        'Authorization' => 'Bearer YOUR_API_TOKEN',
+    ],
+    'sink' => '/path/to/save/boleta_cdr.zip'
+]);
+```
+
+```python Python
+import requests
+
+# Download invoice CDR
+response = requests.get(
+    'https://api.example.com/api/v1/invoices/123/download-cdr',
+    headers={
+        'Authorization': 'Bearer YOUR_API_TOKEN'
+    },
+    stream=True
+)
+
+if response.status_code == 200:
+    with open('cdr.zip', 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+# Download boleta CDR
+boleta_response = requests.get(
+    'https://api.example.com/api/v1/boletas/456/download-cdr',
+    headers={
+        'Authorization': 'Bearer YOUR_API_TOKEN'
+    },
+    stream=True
+)
+
+if boleta_response.status_code == 200:
+    with open('boleta_cdr.zip', 'wb') as f:
+        for chunk in boleta_response.iter_content(chunk_size=8192):
+            f.write(chunk)
+```
+
+</CodeGroup>
+
+## Response Examples
+
+<CodeGroup>
+
+```json CDR Not Found (404)
+{
+  "success": false,
+  "message": "CDR no encontrado"
+}
+```
+
+```json Document Not Found (404)
+{
+  "success": false,
+  "message": "Error al descargar CDR",
+  "error": "No query results for model [App\\Models\\Invoice] 999"
+}
+```
+
+```json System Error (500)
+{
+  "success": false,
+  "message": "Error al descargar CDR",
+  "error": "Storage disk not accessible"
+}
+```
+
+</CodeGroup>
+
+## CDR File Naming Convention
+
+The downloaded CDR file follows SUNAT's naming convention:
+
+```
+R-{RUC}-{TIPO_DOC}-{SERIE}-{NUMERO}.zip
+```
+
+**Examples:**
+- Invoice CDR: `R-20987654321-01-F001-456.zip`
+- Boleta CDR: `R-20987654321-03-B001-1523.zip`
+
+The "R-" prefix stands for "Respuesta" (Response).
+
+Where:
+- **RUC**: Company's tax identification number
+- **TIPO_DOC**: Document type code (01=Invoice, 03=Boleta)
+- **SERIE**: Document series
+- **NUMERO**: Document number
+
+## CDR XML Content
+
+Inside the ZIP file, you'll find an XML file named like: `R-{RUC}-{TIPO_DOC}-{SERIE}-{NUMERO}.xml`
+
+The XML contains:
+
+### Response Information
+
+```xml
+<cbc:ResponseCode>0</cbc:ResponseCode>
+<cbc:Description>La Factura numero F001-456, ha sido aceptada</cbc:Description>
+```
+
+**Common Response Codes:**
+- **0**: Accepted (Aceptado)
+- **0001-0099**: Accepted with observations
+- **2000-4999**: Rejected (see SUNAT error catalog)
+
+### Document Reference
+
+```xml
+<cac:DocumentReference>
+    <cbc:ID>F001-456</cbc:ID>
+</cac:DocumentReference>
+```
+
+### Digest Value
+
+```xml
+<ds:DigestValue>Xj3kL9mP2qR5vW8zA1bC4dE7fG0hI=</ds:DigestValue>
+```
+
+This is the hash of the original XML, used to verify document integrity.
+
+### Response Date/Time
+
+```xml
+<cbc:ResponseDate>2024-03-15</cbc:ResponseDate>
+<cbc:ResponseTime>10:35:22</cbc:ResponseTime>
+```
+
+The exact date and time SUNAT processed the document.
+
+## When is the CDR Available?
+
+The CDR file is received when:
+
+1. You call the [Send to SUNAT](/api/documents/send-to-sunat) endpoint
+2. SUNAT successfully processes the document (accepted or rejected)
+3. The API receives and stores the CDR response
+
+<Warning>
+**The CDR won't exist if:**
+- The document hasn't been sent to SUNAT yet
+- SUNAT's service is down and couldn't process the request
+- There was a network error during submission
+- The document is in `PENDIENTE` status
+</Warning>
+
+## Legal Requirements
+
+<Note>
+**Important for Compliance:**
+
+Peru's tax authority (SUNAT) requires you to store the CDR file along with the XML for at least 5 years. The CDR serves as legal proof that:
+
+- The document was sent to SUNAT
+- SUNAT validated and accepted the document
+- The document has legal validity
+
+Without the CDR, the electronic document may not be considered valid for tax purposes.
+</Note>
+
+## CDR Status Validation
+
+To check if a CDR is available before downloading:
+
+1. Get the document details via the show endpoint
+2. Check the `estado_sunat` field:
+   - `ACEPTADO`: CDR available
+   - `RECHAZADO`: CDR available (with rejection details)
+   - `PENDIENTE`: CDR not available yet
+3. Check if `cdr_path` field is not null
+
+## Use Cases
+
+- **Legal Compliance**: Archive CDR files as required by SUNAT regulations
+- **Proof of Acceptance**: Provide CDR to customers as proof the invoice is valid
+- **Audit Trail**: Maintain complete records of SUNAT responses
+- **Dispute Resolution**: Use CDR to verify document acceptance in case of disputes
+- **Integration**: Share CDR with accounting or ERP systems
+- **Validation**: Extract and verify the digest value matches your XML
+
+## Troubleshooting
+
+### CDR Not Found
+
+If you receive a "CDR no encontrado" error:
+
+1. Verify the document was sent to SUNAT using the show endpoint
+2. Check the `estado_sunat` field - should be `ACEPTADO` or `RECHAZADO`
+3. Confirm `enviado_sunat` is `true`
+4. If the document is `PENDIENTE`, call [Send to SUNAT](/api/documents/send-to-sunat) first
+
+### Storage Issues
+
+If you receive storage errors:
+
+1. Verify storage disk configuration
+2. Check file permissions
+3. Ensure storage path exists
+4. Verify disk space availability
+
+## Related Endpoints
+
+- [Send to SUNAT](/api/documents/send-to-sunat) - Submits document and receives CDR
+- [Download XML](/api/documents/download-xml) - Download the original signed XML
+- [Download PDF](/api/documents/download-pdf) - Download printable version

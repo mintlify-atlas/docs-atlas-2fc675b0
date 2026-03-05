@@ -1,0 +1,535 @@
+---
+title: 'Creating Debit Notes'
+description: 'Complete guide to creating electronic debit notes (Notas de Débito) for amount increases'
+---
+
+## Overview
+
+Debit Notes (Notas de Débito) are used to increase the total amount of a previously issued invoice or boleta. Common use cases include interest charges, penalties, or additional services.
+
+## Prerequisites
+
+- An existing invoice or boleta to modify
+- Configured company and branch
+- Valid reason code for the debit note
+
+## Reason Codes
+
+SUNAT defines specific codes for debit note reasons:
+
+| Code | Description | Use Case |
+|------|-------------|----------|
+| `01` | Interest on arrears | Late payment interest |
+| `02` | Penalty increase | Contract penalties |
+| `03` | Expenses incurred by seller | Additional costs |
+| `10` | Adjustment - Value increase | Price correction upward |
+| `11` | Adjustment - Other concepts | Other valid adjustments |
+
+## Creating a Debit Note
+
+<CodeGroup>
+
+```json Late Payment Interest (Code 01)
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "FD01",
+  "fecha_emision": "2024-04-20",
+  "moneda": "PEN",
+  "tipo_doc_afectado": "01",
+  "num_doc_afectado": "F001-00000123",
+  "cod_motivo": "01",
+  "des_motivo": "Interés por mora - Factura vencida el 15/03/2024",
+  "client": {
+    "tipo_documento": "6",
+    "numero_documento": "20123456789",
+    "razon_social": "EMPRESA CLIENTE SAC",
+    "direccion": "Av. Los Alamos 123",
+    "email": "cliente@empresa.com"
+  },
+  "detalles": [
+    {
+      "codigo": "INT-001",
+      "descripcion": "Interés por mora - 30 días de retraso",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 295.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+```json Additional Services (Code 03)
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "FD01",
+  "fecha_emision": "2024-03-18",
+  "moneda": "PEN",
+  "tipo_doc_afectado": "01",
+  "num_doc_afectado": "F001-00000150",
+  "cod_motivo": "03",
+  "des_motivo": "Gastos adicionales de envío urgente",
+  "client": {
+    "tipo_documento": "6",
+    "numero_documento": "20987654321",
+    "razon_social": "DISTRIBUIDORA PERU SAC"
+  },
+  "detalles": [
+    {
+      "codigo": "ENV-URG",
+      "descripcion": "Servicio de envío urgente",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 150.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    },
+    {
+      "codigo": "EMB-ESP",
+      "descripcion": "Embalaje especial",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 50.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+```json Price Adjustment (Code 10)
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "FD01",
+  "fecha_emision": "2024-03-16",
+  "moneda": "USD",
+  "tipo_doc_afectado": "01",
+  "num_doc_afectado": "F001-00000200",
+  "cod_motivo": "10",
+  "des_motivo": "Ajuste por diferencia de tipo de cambio",
+  "client": {
+    "tipo_documento": "6",
+    "numero_documento": "20456789123",
+    "razon_social": "IMPORTADORA LIMA SAC"
+  },
+  "detalles": [
+    {
+      "codigo": "AJU-TC",
+      "descripcion": "Ajuste por tipo de cambio",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 85.50,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+```json Boleta Debit Note
+{
+  "company_id": 1,
+  "branch_id": 1,
+  "serie": "BD01",
+  "fecha_emision": "2024-03-15",
+  "moneda": "PEN",
+  "tipo_doc_afectado": "03",
+  "num_doc_afectado": "B001-00000456",
+  "cod_motivo": "03",
+  "des_motivo": "Cargo adicional por instalación",
+  "client": {
+    "tipo_documento": "1",
+    "numero_documento": "12345678",
+    "razon_social": "JUAN PEREZ GOMEZ"
+  },
+  "detalles": [
+    {
+      "codigo": "INST-001",
+      "descripcion": "Servicio de instalación adicional",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 42.37,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+```bash cURL Request
+curl -X POST https://api.example.com/api/debit-notes \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "company_id": 1,
+    "branch_id": 1,
+    "serie": "FD01",
+    "fecha_emision": "2024-03-20",
+    "moneda": "PEN",
+    "tipo_doc_afectado": "01",
+    "num_doc_afectado": "F001-00000123",
+    "cod_motivo": "01",
+    "des_motivo": "Interés por mora",
+    "client": {
+      "tipo_documento": "6",
+      "numero_documento": "20123456789",
+      "razon_social": "EMPRESA CLIENTE SAC"
+    },
+    "detalles": [{
+      "codigo": "INT-001",
+      "descripcion": "Interés por pago tardío",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 100.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }]
+  }'
+```
+
+</CodeGroup>
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 25,
+    "company_id": 1,
+    "branch_id": 1,
+    "tipo_documento": "08",
+    "serie": "FD01",
+    "correlativo": "00000025",
+    "numero_completo": "FD01-00000025",
+    "tipo_doc_afectado": "01",
+    "num_doc_afectado": "F001-00000123",
+    "cod_motivo": "01",
+    "des_motivo": "Interés por mora - Factura vencida el 15/03/2024",
+    "fecha_emision": "2024-04-20",
+    "moneda": "PEN",
+    "mto_oper_gravadas": 295.00,
+    "mto_igv": 53.10,
+    "mto_imp_venta": 348.10,
+    "estado_sunat": "PENDIENTE"
+  },
+  "message": "Nota de débito creada correctamente"
+}
+```
+
+## Required Fields
+
+<ParamField path="company_id" type="integer" required>
+  Company ID issuing the debit note
+</ParamField>
+
+<ParamField path="branch_id" type="integer" required>
+  Branch ID (must belong to company)
+</ParamField>
+
+<ParamField path="serie" type="string" required>
+  Debit note series (max 4 characters)
+  - Invoices: "FD01", "FD02", etc.
+  - Boletas: "BD01", "BD02", etc.
+</ParamField>
+
+<ParamField path="fecha_emision" type="date" required>
+  Issue date (YYYY-MM-DD)
+</ParamField>
+
+<ParamField path="tipo_doc_afectado" type="string" required>
+  Affected document type:
+  - `01`: Invoice (Factura)
+  - `03`: Boleta
+</ParamField>
+
+<ParamField path="num_doc_afectado" type="string" required>
+  Complete number of affected document (e.g., "F001-00000123")
+</ParamField>
+
+<ParamField path="cod_motivo" type="string" required>
+  Reason code: `01`, `02`, `03`, `10`, or `11`
+</ParamField>
+
+<ParamField path="des_motivo" type="string" required>
+  Reason description (max 250 characters)
+</ParamField>
+
+<ParamField path="moneda" type="string" required>
+  Currency: `PEN` or `USD` (must match original)
+</ParamField>
+
+<Warning>
+Unlike credit notes, debit notes for invoices can only reference document types `01` (Invoice) or `03` (Boleta). They cannot reference other debit/credit notes.
+</Warning>
+
+## Details Array
+
+<ParamField path="detalles[].codigo" type="string" required>
+  Product/service code for the additional charge
+</ParamField>
+
+<ParamField path="detalles[].descripcion" type="string" required>
+  Clear description of the charge
+</ParamField>
+
+<ParamField path="detalles[].unidad" type="string" required>
+  Unit of measure (typically "ZZ" for services)
+</ParamField>
+
+<ParamField path="detalles[].cantidad" type="number" required>
+  Quantity (typically 1 for charges)
+</ParamField>
+
+<ParamField path="detalles[].mto_valor_unitario" type="number" required>
+  Unit value of the additional charge
+</ParamField>
+
+<ParamField path="detalles[].tip_afe_igv" type="string" required>
+  Tax affectation type (usually `10` for taxable)
+</ParamField>
+
+## Sending to SUNAT
+
+Debit notes are sent using the same process as invoices:
+
+```bash
+curl -X POST https://api.example.com/api/debit-notes/25/send-sunat \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 25,
+    "numero_completo": "FD01-00000025",
+    "estado_sunat": "ACEPTADO",
+    "xml_path": "storage/companies/1/debit-notes/xml/...",
+    "cdr_path": "storage/companies/1/debit-notes/cdr/...",
+    "respuesta_sunat": {
+      "code": "0",
+      "description": "La Nota de Debito ha sido aceptada"
+    }
+  },
+  "message": "Nota de débito enviada correctamente a SUNAT"
+}
+```
+
+## Downloading Documents
+
+### Download XML
+
+```bash
+curl -X GET https://api.example.com/api/debit-notes/25/download-xml \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o debit-note.xml
+```
+
+### Download CDR
+
+```bash
+curl -X GET https://api.example.com/api/debit-notes/25/download-cdr \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o R-FD01-00000025.zip
+```
+
+### Download PDF
+
+```bash
+curl -X GET https://api.example.com/api/debit-notes/25/download-pdf?format=A4 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o debit-note.pdf
+```
+
+## Querying Debit Notes
+
+```bash
+curl -X GET "https://api.example.com/api/debit-notes?company_id=1&fecha_desde=2024-03-01&fecha_hasta=2024-03-31" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Query Parameters
+
+- `company_id`: Filter by company
+- `branch_id`: Filter by branch
+- `estado_sunat`: Filter by SUNAT status
+- `fecha_desde`: Start date
+- `fecha_hasta`: End date
+- `per_page`: Items per page
+
+## Advanced Features
+
+### Custom Legends
+
+Add custom text to appear on the document:
+
+```json
+{
+  "leyendas": [
+    {
+      "code": "2000",
+      "value": "Pago debe realizarse dentro de 5 días hábiles"
+    }
+  ]
+}
+```
+
+<Note>
+The API automatically generates the standard amount legend (code 1000) with the total in words.
+</Note>
+
+### Additional Data
+
+Include extra information for internal use:
+
+```json
+{
+  "datos_adicionales": {
+    "contrato": "CONT-2024-001",
+    "area_responsable": "Créditos y Cobranzas",
+    "aprobado_por": "Maria Rodriguez",
+    "notas_internas": "Cliente notificado el 10/03/2024"
+  }
+}
+```
+
+## Implementation Details
+
+From `app/Services/DocumentService.php:1000-1114`, the debit note creation process:
+
+1. Validates company and branch relationship
+2. Creates or retrieves client (must match original)
+3. Generates automatic correlative number
+4. Processes details and calculates totals
+5. Generates automatic legends
+6. Stores with status `PENDIENTE`
+
+### Automatic Calculations
+
+The API handles:
+- Line item calculations (quantity × unit value)
+- IGV calculation per item
+- Subtotals by tax category
+- Total IGV
+- Final amount
+
+## Common Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| Referenced document not found | Invalid `num_doc_afectado` | Verify original document exists |
+| Client mismatch | Different client than original | Use exact client from original |
+| Invalid reason code | Wrong `cod_motivo` | Use valid code: 01, 02, 03, 10, 11 |
+| Currency mismatch | Different currency than original | Match original document currency |
+| Invalid document type | Wrong `tipo_doc_afectado` | Only 01 (Invoice) or 03 (Boleta) |
+
+## Best Practices
+
+1. **Provide clear descriptions** - Explain the reason for the additional charge
+2. **Reference complete document numbers** - Include series (e.g., "F001-00000123")
+3. **Match client exactly** - Use same client data as original document
+4. **Document the business reason** - Keep detailed records of why debit note was issued
+5. **Verify original is accepted** - Original document must be ACEPTADO by SUNAT
+6. **Use appropriate reason codes** - Choose the code that best matches the situation
+
+## Use Case Examples
+
+### Late Payment Interest Calculation
+
+```json
+{
+  "cod_motivo": "01",
+  "des_motivo": "Interés moratorio: 30 días x 5% mensual sobre S/ 5,900.00",
+  "detalles": [
+    {
+      "codigo": "INT-MORA",
+      "descripcion": "Interés por mora - 30 días de atraso",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 295.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+### Penalty for Contract Breach
+
+```json
+{
+  "cod_motivo": "02",
+  "des_motivo": "Penalidad según cláusula 8.3 del contrato - Retraso en entrega",
+  "detalles": [
+    {
+      "codigo": "PEN-CONT",
+      "descripcion": "Penalidad contractual por incumplimiento de plazo",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 500.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+### Additional Shipping Costs
+
+```json
+{
+  "cod_motivo": "03",
+  "des_motivo": "Gastos adicionales de transporte a zona de difícil acceso",
+  "detalles": [
+    {
+      "codigo": "TRANS-ADIC",
+      "descripcion": "Flete adicional a zona rural",
+      "unidad": "ZZ",
+      "cantidad": 1,
+      "mto_valor_unitario": 200.00,
+      "porcentaje_igv": 18,
+      "tip_afe_igv": "10"
+    }
+  ]
+}
+```
+
+## Validation Rules
+
+<Warning>
+Validations enforced by `app/Http/Requests/StoreDebitNoteRequest.php`:
+</Warning>
+
+- Serie: Required, max 4 characters
+- `tipo_doc_afectado`: Must be `01` or `03` only
+- `cod_motivo`: Must be `01`, `02`, `03`, `10`, or `11`
+- Client document type: Must be 0, 1, 4, or 6
+- Details: At least 1 item required
+- All amounts: Must be ≥ 0
+
+## Differences from Credit Notes
+
+| Aspect | Debit Note | Credit Note |
+|--------|------------|-------------|
+| Purpose | Increase amount | Decrease amount |
+| Reason codes | 01, 02, 03, 10, 11 | 01-13 |
+| Affect types | 01, 03 only | 01, 03, 07, 08 |
+| Common use | Interest, penalties | Returns, corrections |
+| Effect | Adds to debt | Reduces debt |
+
+## Next Steps
+
+<Card title="Credit Notes" icon="file-invoice" href="/guides/credit-notes">
+  Learn about credit notes for amount reductions
+</Card>
+
+<Card title="PDF Generation" icon="file-pdf" href="/guides/pdf-generation">
+  Customize debit note PDF templates
+</Card>

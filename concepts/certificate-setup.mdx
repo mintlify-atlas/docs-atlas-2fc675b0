@@ -1,0 +1,530 @@
+---
+title: 'Certificate Setup'
+description: 'SUNAT digital certificate configuration, .pfx to .pem conversion, and storage'
+---
+
+## Overview
+
+SUNAT requires a **digital certificate** to sign electronic documents before sending them to their web services. The certificate authenticates your company and ensures document integrity.
+
+<Warning>
+  The digital certificate is **mandatory** for sending documents to SUNAT. Without a valid certificate, all document submissions will fail.
+</Warning>
+
+## Certificate Requirements
+
+### SUNAT-Approved Certificates
+
+You must obtain a digital certificate from a SUNAT-approved Certificate Authority (CA):
+
+- **eCert** (formerly ePeru)
+- **Certicámara**
+- **AC Camerfirma
+- **Llama Sign**
+
+<Info>
+  For **Beta/Testing environment**, SUNAT provides a test certificate that can be used during development.
+</Info>
+
+### Certificate Format
+
+SUNAT certificates typically come in `.pfx` (PKCS#12) format, which contains:
+- **Private Key** (encrypted)
+- **Public Certificate**
+- **Certificate Chain** (optional)
+
+The API requires the certificate in **`.pem` format** for use with the Greenter library.
+
+## Certificate Conversion
+
+### Convert .pfx to .pem
+
+Use OpenSSL to convert your `.pfx` certificate to `.pem` format:
+
+<Steps>
+  <Step title="Extract Private Key">
+    ```bash
+    openssl pkcs12 -in certificate.pfx -nocerts -out private-key.pem -nodes
+    ```
+    
+    You'll be prompted for the `.pfx` password.
+    
+    <Note>
+      The `-nodes` flag creates an unencrypted private key. Store this file securely!
+    </Note>
+  </Step>
+  
+  <Step title="Extract Certificate">
+    ```bash
+    openssl pkcs12 -in certificate.pfx -clcerts -nokeys -out certificate.pem
+    ```
+    
+    This extracts the public certificate without the private key.
+  </Step>
+  
+  <Step title="Combine into Single .pem File">
+    ```bash
+    cat private-key.pem certificate.pem > combined-certificate.pem
+    ```
+    
+    The combined file should have this structure:
+    
+    ```
+    -----BEGIN PRIVATE KEY-----
+    [Base64 encoded private key]
+    -----END PRIVATE KEY-----
+    -----BEGIN CERTIFICATE-----
+    [Base64 encoded certificate]
+    -----END CERTIFICATE-----
+    ```
+  </Step>
+  
+  <Step title="Verify Certificate">
+    ```bash
+    openssl x509 -in combined-certificate.pem -text -noout
+    ```
+    
+    Check that:
+    - Subject CN matches your company RUC
+    - Certificate is not expired
+    - Issuer is a SUNAT-approved CA
+  </Step>
+</Steps>
+
+### Alternative: RSA PRIVATE KEY Format
+
+Some certificates use RSA PRIVATE KEY format:
+
+```
+-----BEGIN RSA PRIVATE KEY-----
+[Base64 encoded RSA key]
+-----END RSA PRIVATE KEY-----
+-----BEGIN CERTIFICATE-----
+[Base64 encoded certificate]
+-----END CERTIFICATE-----
+```
+
+<Accordion title="Convert PKCS#8 to RSA Format">
+  If you have a PKCS#8 private key, convert it to RSA format:
+  
+  ```bash
+  openssl rsa -in private-key.pem -out rsa-private-key.pem
+  ```
+</Accordion>
+
+## Certificate Storage
+
+The API stores certificates in the filesystem and references them in the database.
+
+### Storage Location
+
+**Location:** `storage/app/public/certificado/certificado.pem`
+
+```bash
+# Create certificate directory
+mkdir -p storage/app/public/certificado
+
+# Copy certificate
+cp combined-certificate.pem storage/app/public/certificado/certificado.pem
+
+# Set permissions
+chmod 600 storage/app/public/certificado/certificado.pem
+```
+
+<Warning>
+  **Security:** The certificate file contains your private key. Set restrictive permissions (600) and never commit it to version control.
+</Warning>
+
+### Database Storage (Optional)
+
+Companies can store certificate content in the `certificado_pem` field:
+
+```php app/Models/Company.php
+protected $fillable = [
+    'certificado_pem',      // PEM certificate content
+    'certificado_password', // Original .pfx password (if needed)
+];
+
+protected $hidden = [
+    'certificado_pem',      // Never expose in API responses
+    'certificado_password',
+];
+```
+
+## Certificate Loading
+
+The GreenterService loads the certificate from the filesystem:
+
+**Location:** `app/Services/GreenterService.php:60`
+
+```php app/Services/GreenterService.php
+protected function initializeSee(): See
+{
+    $see = new See();
+    
+    // Load certificate from filesystem
+    try {
+        $certificadoPath = storage_path('app/public/certificado/certificado.pem');
+        
+        if (!file_exists($certificadoPath)) {
+            throw new Exception("Certificate file not found: " . $certificadoPath);
+        }
+        
+        $certificadoContent = file_get_contents($certificadoPath);
+        
+        if ($certificadoContent === false) {
+            throw new Exception("Could not read certificate file");
+        }
+        
+        $see->setCertificate($certificadoContent);
+        Log::info("Certificate loaded from: " . $certificadoPath);
+        
+    } catch (Exception $e) {
+        Log::error("Error configuring certificate: " . $e->getMessage());
+        throw new Exception("Error configuring certificate: " . $e->getMessage());
+    }
+    
+    return $see;
+}
+```
+
+## Certificate Validation
+
+The API includes commands to validate certificates:
+
+### Validate Certificate
+
+**Command:** `app/Console/Commands/ValidateCertificate.php`
+
+```bash
+php artisan certificate:validate
+```
+
+**This command checks:**
+- Certificate file exists
+- Certificate is readable
+- Private key is valid
+- Certificate is not expired
+- Certificate subject matches expected format
+
+### Clean Certificate
+
+**Command:** `app/Console/Commands/CleanCertificate.php`
+
+```bash
+php artisan certificate:clean
+```
+
+**This command:**
+- Removes Bag Attributes from .pem files
+- Normalizes line endings
+- Validates PEM structure
+- Creates a clean version of the certificate
+
+## Certificate Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Error: Certificate file not found">
+    **Cause:** Certificate file doesn't exist at the expected location.
+    
+    **Solution:**
+    ```bash
+    # Verify file exists
+    ls -la storage/app/public/certificado/certificado.pem
+    
+    # Create directory if needed
+    mkdir -p storage/app/public/certificado
+    
+    # Copy certificate
+    cp your-certificate.pem storage/app/public/certificado/certificado.pem
+    ```
+  </Accordion>
+  
+  <Accordion title="Error: Invalid certificate format">
+    **Cause:** Certificate file is corrupted or has incorrect structure.
+    
+    **Solution:**
+    
+    1. Verify PEM structure:
+    ```bash
+    cat storage/app/public/certificado/certificado.pem
+    ```
+    
+    Should contain both `BEGIN PRIVATE KEY` and `BEGIN CERTIFICATE` blocks.
+    
+    2. Clean certificate:
+    ```bash
+    php artisan certificate:clean
+    ```
+    
+    3. Re-convert from .pfx:
+    ```bash
+    openssl pkcs12 -in certificate.pfx -out certificate.pem -nodes
+    ```
+  </Accordion>
+  
+  <Accordion title="Error: Certificate expired">
+    **Cause:** Certificate validity period has ended.
+    
+    **Solution:**
+    
+    1. Check expiration date:
+    ```bash
+    openssl x509 -in storage/app/public/certificado/certificado.pem -noout -enddate
+    ```
+    
+    2. Renew certificate with your CA
+    
+    3. Replace expired certificate:
+    ```bash
+    cp new-certificate.pem storage/app/public/certificado/certificado.pem
+    ```
+  </Accordion>
+  
+  <Accordion title="Error: SUNAT rejects signature">
+    **Cause:** Certificate CN doesn't match company RUC or certificate chain is incomplete.
+    
+    **Solution:**
+    
+    1. Verify certificate subject:
+    ```bash
+    openssl x509 -in storage/app/public/certificado/certificado.pem -noout -subject
+    ```
+    
+    Subject should contain: `CN = RUC-[YourRUC]` or similar.
+    
+    2. Ensure certificate is from SUNAT-approved CA
+    
+    3. Include full certificate chain if required:
+    ```bash
+    cat private-key.pem certificate.pem intermediate-ca.pem > full-chain.pem
+    ```
+  </Accordion>
+  
+  <Accordion title="Error: Permission denied reading certificate">
+    **Cause:** Web server doesn't have permission to read certificate file.
+    
+    **Solution:**
+    ```bash
+    # Set correct ownership
+    chown www-data:www-data storage/app/public/certificado/certificado.pem
+    
+    # Set correct permissions
+    chmod 600 storage/app/public/certificado/certificado.pem
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Certificate Structure
+
+The GreenterService includes methods to validate and clean certificate structure:
+
+**Location:** `app/Services/GreenterService.php:674`
+
+```php app/Services/GreenterService.php
+protected function isValidPemStructure(string $pem): bool
+{
+    // Must have private key and certificate (in any order)
+    $hasPrivateKey = strpos($pem, '-----BEGIN PRIVATE KEY-----') !== false && 
+                    strpos($pem, '-----END PRIVATE KEY-----') !== false;
+    
+    $hasCertificate = strpos($pem, '-----BEGIN CERTIFICATE-----') !== false && 
+                     strpos($pem, '-----END CERTIFICATE-----') !== false;
+    
+    // Also support RSA PRIVATE KEY format
+    $hasRsaPrivateKey = strpos($pem, '-----BEGIN RSA PRIVATE KEY-----') !== false && 
+                       strpos($pem, '-----END RSA PRIVATE KEY-----') !== false;
+    
+    $hasValidPrivateKey = $hasPrivateKey || $hasRsaPrivateKey;
+    
+    return $hasValidPrivateKey && $hasCertificate;
+}
+```
+
+### Remove Bag Attributes
+
+Some .pfx exports include "Bag Attributes" that can interfere with OpenSSL:
+
+```php app/Services/GreenterService.php:753
+protected function removeBagAttributes(string $pem): string
+{
+    $lines = explode("\n", $pem);
+    $cleanedLines = [];
+    $inPemBlock = false;
+    
+    foreach ($lines as $line) {
+        $trimmedLine = trim($line);
+        
+        // Detect start of PEM block
+        if (strpos($trimmedLine, '-----BEGIN') === 0) {
+            $inPemBlock = true;
+        }
+        
+        // Only include lines that are part of PEM block
+        if ($inPemBlock) {
+            $cleanedLines[] = $line;
+        }
+        
+        // Detect end of PEM block
+        if (strpos($trimmedLine, '-----END') === 0) {
+            $inPemBlock = false;
+        }
+    }
+    
+    return implode("\n", $cleanedLines);
+}
+```
+
+## Test Certificate (Beta Environment)
+
+For testing in Beta environment, you can use SUNAT's test certificate:
+
+```bash
+# Download SUNAT test certificate
+wget https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService -O test-cert.pfx
+
+# Password for test certificate
+Password: 12345678
+
+# Convert to PEM
+openssl pkcs12 -in test-cert.pfx -out test-cert.pem -nodes
+```
+
+<Warning>
+  **Never use test certificates in production environment!** SUNAT production servers will reject them.
+</Warning>
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Never Commit Certificates" icon="ban">
+    Add certificate files to `.gitignore`:
+    
+    ```
+    storage/app/public/certificado/
+    *.pem
+    *.pfx
+    ```
+  </Card>
+  
+  <Card title="Restrict File Permissions" icon="lock">
+    Only the web server should read certificates:
+    
+    ```bash
+    chmod 600 certificado.pem
+    chown www-data:www-data certificado.pem
+    ```
+  </Card>
+  
+  <Card title="Encrypt at Rest" icon="shield">
+    Consider encrypting certificate storage:
+    
+    ```php
+    use Illuminate\Support\Facades\Crypt;
+    
+    $encrypted = Crypt::encryptString($pemContent);
+    $company->update(['certificado_pem' => $encrypted]);
+    ```
+  </Card>
+  
+  <Card title="Monitor Expiration" icon="calendar">
+    Set up alerts for certificate expiration:
+    
+    ```php
+    $cert = openssl_x509_parse($pemContent);
+    $expirationDate = $cert['validTo_time_t'];
+    
+    if ($expirationDate < strtotime('+30 days')) {
+        // Alert: Certificate expires soon
+    }
+    ```
+  </Card>
+</CardGroup>
+
+## Certificate Renewal
+
+SUNAT certificates typically expire after 1-2 years. Plan for renewal:
+
+<Steps>
+  <Step title="Monitor Expiration">
+    ```bash
+    openssl x509 -in certificado.pem -noout -dates
+    ```
+    
+    Set reminders 60 and 30 days before expiration.
+  </Step>
+  
+  <Step title="Request Renewal from CA">
+    Contact your Certificate Authority (eCert, Certicámara, etc.) at least 30 days before expiration.
+  </Step>
+  
+  <Step title="Test New Certificate in Beta">
+    Before using in production, test the new certificate in Beta environment.
+  </Step>
+  
+  <Step title="Deploy to Production">
+    Replace the old certificate during a maintenance window:
+    
+    ```bash
+    # Backup old certificate
+    cp certificado.pem certificado.pem.backup
+    
+    # Deploy new certificate
+    cp new-certificate.pem certificado.pem
+    
+    # Restart services if needed
+    php artisan cache:clear
+    ```
+  </Step>
+</Steps>
+
+## Multi-Company Certificates
+
+Each company can have its own certificate:
+
+```php
+// Store per-company certificates
+$company->update([
+    'certificado_pem' => $pemContent,
+    'certificado_password' => encrypt($pfxPassword),
+]);
+
+// Load company-specific certificate
+public function initializeSee(): See
+{
+    $see = new See();
+    
+    // Check if company has custom certificate
+    if ($this->company->certificado_pem) {
+        $see->setCertificate($this->company->certificado_pem);
+    } else {
+        // Fall back to shared certificate
+        $sharedCert = file_get_contents(storage_path('app/public/certificado/certificado.pem'));
+        $see->setCertificate($sharedCert);
+    }
+    
+    return $see;
+}
+```
+
+## Common Certificate Issues
+
+| Issue | Symptom | Solution |
+|-------|---------|----------|
+| **Wrong Format** | "Invalid certificate" error | Convert .pfx to .pem with OpenSSL |
+| **Missing Private Key** | "Could not sign document" | Ensure .pem contains both private key and certificate |
+| **Expired Certificate** | SUNAT rejects with "Certificate expired" | Renew certificate with CA |
+| **Wrong RUC** | SUNAT rejects signature | Certificate CN must match company RUC |
+| **File Permissions** | "Permission denied" reading certificate | Set correct ownership and permissions (600) |
+| **Bag Attributes** | OpenSSL parsing errors | Run `php artisan certificate:clean` |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environments" icon="globe" href="/concepts/environments">
+    Configure Beta and Production SUNAT endpoints
+  </Card>
+  <Card title="Create Invoice" icon="file-invoice" href="/api-reference/invoices/create">
+    Start sending documents to SUNAT
+  </Card>
+</CardGroup>

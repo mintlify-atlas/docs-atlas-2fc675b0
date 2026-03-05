@@ -1,0 +1,457 @@
+---
+title: Download PDF
+api: GET /api/v1/invoices/{id}/download-pdf
+---
+
+Downloads a printable PDF version of an invoice or boleta. The PDF is generated using a customizable template and includes all document details, tax calculations, and company branding.
+
+<Note>
+This endpoint works for both invoices and boletas. Use `/api/v1/invoices/{id}/download-pdf` for invoices and `/api/v1/boletas/{id}/download-pdf` for boletas.
+</Note>
+
+## Authentication
+
+This endpoint requires authentication using a Bearer token (Sanctum).
+
+```bash
+Authorization: Bearer YOUR_API_TOKEN
+```
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The ID of the invoice or boleta whose PDF you want to download.
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="format" type="string">
+  PDF template format to use. If not specified, uses the company's default format.
+  
+  Available formats:
+  - `a4`: Standard A4 format
+  - `ticket`: Thermal printer format (80mm)
+  - `letter`: US Letter format
+  - Custom formats configured in your company settings
+</ParamField>
+
+<ParamField query="download" type="boolean">
+  Whether to download the PDF or display it inline in the browser.
+  - `true`: Force download (default)
+  - `false`: Display in browser
+</ParamField>
+
+## Response
+
+### Success Response
+
+Returns the PDF file with appropriate headers:
+
+- **Content-Type**: `application/pdf`
+- **Content-Disposition**: 
+  - `attachment; filename="{serie}-{numero}.pdf"` (download=true)
+  - `inline; filename="{serie}-{numero}.pdf"` (download=false)
+
+The PDF includes:
+
+- Company logo and information
+- Document details (type, series, number, date)
+- Client information
+- Item details with quantities, prices, and taxes
+- Tax breakdown (IGV, ISC, ICBPER)
+- Total amounts
+- QR code (for SUNAT validation)
+- Payment terms (for credit invoices)
+- Additional notes and legends
+
+### Error Response
+
+<ResponseField name="success" type="boolean">
+  Always `false` for error responses.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message describing why the PDF couldn't be generated.
+</ResponseField>
+
+## Request Examples
+
+<CodeGroup>
+
+```bash cURL - Invoice (Default Format)
+curl -X GET https://api.example.com/api/v1/invoices/123/download-pdf \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -O -J
+```
+
+```bash cURL - Invoice (Specific Format)
+curl -X GET "https://api.example.com/api/v1/invoices/123/download-pdf?format=a4" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -O -J
+```
+
+```bash cURL - Boleta (Ticket Format)
+curl -X GET "https://api.example.com/api/v1/boletas/456/download-pdf?format=ticket" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -O -J
+```
+
+```bash cURL - Display in Browser
+curl -X GET "https://api.example.com/api/v1/invoices/123/download-pdf?download=false" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -O -J
+```
+
+```javascript JavaScript
+// Download invoice PDF
+const downloadPDF = async (invoiceId, format = null) => {
+  const url = new URL(`https://api.example.com/api/v1/invoices/${invoiceId}/download-pdf`);
+  if (format) {
+    url.searchParams.append('format', format);
+  }
+  
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': 'Bearer YOUR_API_TOKEN'
+    }
+  });
+  
+  if (response.ok) {
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = 'invoice.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+};
+
+// Usage
+await downloadPDF(123, 'a4');
+
+// Display PDF in browser (iframe or new window)
+const displayPDF = async (invoiceId) => {
+  const url = `https://api.example.com/api/v1/invoices/${invoiceId}/download-pdf?download=false`;
+  window.open(url, '_blank');
+};
+```
+
+```php PHP
+$client = new GuzzleHttp\Client();
+
+// Download invoice PDF with specific format
+$response = $client->get('https://api.example.com/api/v1/invoices/123/download-pdf', [
+    'headers' => [
+        'Authorization' => 'Bearer YOUR_API_TOKEN',
+    ],
+    'query' => [
+        'format' => 'a4'
+    ],
+    'sink' => '/path/to/save/invoice.pdf'
+]);
+
+// Download boleta PDF (ticket format)
+$boletaResponse = $client->get('https://api.example.com/api/v1/boletas/456/download-pdf', [
+    'headers' => [
+        'Authorization' => 'Bearer YOUR_API_TOKEN',
+    ],
+    'query' => [
+        'format' => 'ticket'
+    ],
+    'sink' => '/path/to/save/boleta.pdf'
+]);
+
+// Get PDF as string for further processing
+$pdfResponse = $client->get('https://api.example.com/api/v1/invoices/123/download-pdf', [
+    'headers' => [
+        'Authorization' => 'Bearer YOUR_API_TOKEN',
+    ]
+]);
+
+$pdfContent = (string) $pdfResponse->getBody();
+```
+
+```python Python
+import requests
+
+# Download invoice PDF
+response = requests.get(
+    'https://api.example.com/api/v1/invoices/123/download-pdf',
+    headers={
+        'Authorization': 'Bearer YOUR_API_TOKEN'
+    },
+    params={'format': 'a4'},
+    stream=True
+)
+
+if response.status_code == 200:
+    with open('invoice.pdf', 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+# Download boleta PDF (ticket format)
+boleta_response = requests.get(
+    'https://api.example.com/api/v1/boletas/456/download-pdf',
+    headers={
+        'Authorization': 'Bearer YOUR_API_TOKEN'
+    },
+    params={'format': 'ticket'},
+    stream=True
+)
+
+if boleta_response.status_code == 200:
+    with open('boleta.pdf', 'wb') as f:
+        for chunk in boleta_response.iter_content(chunk_size=8192):
+            f.write(chunk)
+```
+
+</CodeGroup>
+
+## Response Examples
+
+<CodeGroup>
+
+```text Success (200)
+%PDF-1.4
+%âãÏÓ
+... (binary PDF content) ...
+```
+
+```json Document Not Found (404)
+{
+  "success": false,
+  "message": "Error al descargar PDF",
+  "error": "No query results for model [App\\Models\\Invoice] 999"
+}
+```
+
+```json System Error (500)
+{
+  "success": false,
+  "message": "Error al descargar PDF",
+  "error": "PDF generation failed: template not found"
+}
+```
+
+</CodeGroup>
+
+## PDF File Naming Convention
+
+The downloaded PDF file is named according to the document:
+
+```
+{SERIE}-{NUMERO}.pdf
+```
+
+**Examples:**
+- Invoice: `F001-456.pdf`
+- Boleta: `B001-1523.pdf`
+- Credit Note: `FC01-12.pdf`
+- Debit Note: `FD01-8.pdf`
+
+## PDF Template Formats
+
+### A4 Format (Default)
+
+- **Size**: 210mm x 297mm
+- **Best for**: Formal invoices, business documents
+- **Includes**: Full company header, detailed item table, complete tax breakdown, terms and conditions
+- **Orientation**: Portrait
+
+### Ticket Format
+
+- **Size**: 80mm x continuous
+- **Best for**: Thermal printers, point of sale
+- **Includes**: Essential information only, compact layout, optimized for thermal printing
+- **Orientation**: Portrait (continuous)
+
+### Letter Format
+
+- **Size**: 215.9mm x 279.4mm (8.5" x 11")
+- **Best for**: US-based clients, international documents
+- **Includes**: Similar to A4 with US paper size
+- **Orientation**: Portrait
+
+## PDF Content Structure
+
+The generated PDF includes:
+
+### Header Section
+- Company logo (if configured)
+- Company name, RUC, and address
+- Branch information
+- Document type badge (FACTURA ELECTRÓNICA, BOLETA DE VENTA)
+
+### Document Information
+- Series and number
+- Issue date
+- Due date (for credit invoices)
+- Currency
+
+### Client Information
+- Document type and number
+- Name/Business name
+- Address
+- Contact information
+
+### Items Table
+- Item number
+- Product/service code
+- Description
+- Quantity and unit
+- Unit price
+- Total price
+
+### Tax Breakdown
+- Subtotal (before taxes)
+- IGV (18%)
+- ISC (if applicable)
+- ICBPER (plastic bag tax, if applicable)
+- Detraction amount (if applicable)
+- Total amount
+
+### Payment Information
+- Payment type (Contado/Crédito)
+- Installment details (for credit)
+- Bank accounts (for detraction)
+
+### Footer Section
+- QR code linking to SUNAT validation
+- Digital signature hash
+- Amount in words
+- Additional notes and legends
+- "Representación impresa de la Factura Electrónica" disclaimer
+
+## QR Code
+
+The PDF includes a QR code that contains:
+
+```
+{RUC}|{TIPO_DOC}|{SERIE}|{NUMERO}|{IGV}|{TOTAL}|{FECHA}|{TIPO_DOC_CLIENTE}|{NUM_DOC_CLIENTE}|{HASH}
+```
+
+**Example:**
+```
+20987654321|01|F001|456|90.00|590.00|2024-03-15|6|20123456789|Xj3kL9mP2qR5vW8zA1bC4dE7fG0hI
+```
+
+Customers can scan this QR code to validate the document on SUNAT's website.
+
+## Generating vs Downloading
+
+There are two related endpoints:
+
+### Download PDF (Current Endpoint)
+`GET /api/v1/invoices/{id}/download-pdf`
+
+- Downloads existing PDF if available
+- Generates new PDF if not found
+- Uses cached version for performance
+
+### Generate PDF
+`POST /api/v1/invoices/{id}/generate-pdf`
+
+- Always generates a fresh PDF
+- Bypasses cache
+- Useful when document or template is updated
+- Same query parameters as download endpoint
+
+<Note>
+For most use cases, use the **download** endpoint (GET). It's faster and more efficient. Only use the generate endpoint (POST) when you need to force regeneration.
+</Note>
+
+## PDF Generation Requirements
+
+For successful PDF generation, ensure:
+
+1. **Document exists**: The invoice/boleta must be created
+2. **Company configured**: Logo, address, and settings must be set
+3. **Template available**: The requested format must exist
+4. **Required libraries**: wkhtmltopdf or similar PDF engine must be installed
+
+## Customizing PDF Templates
+
+To customize the PDF appearance:
+
+1. Configure company branding in company settings
+2. Upload company logo
+3. Set default PDF format
+4. Customize template colors and fonts (if supported)
+5. Add custom footer text or terms and conditions
+
+For advanced customization, templates can be modified in:
+```
+resources/views/pdf/invoice/a4.blade.php
+resources/views/pdf/invoice/ticket.blade.php
+resources/views/pdf/boleta/a4.blade.php
+resources/views/pdf/boleta/ticket.blade.php
+```
+
+## Use Cases
+
+- **Customer Distribution**: Send PDF invoices/boletas to customers via email
+- **Printing**: Print physical copies for customers or archives
+- **Legal Compliance**: Store PDF copies alongside XML/CDR files
+- **Accounting Integration**: Import PDFs into accounting software
+- **Customer Portal**: Allow customers to download their documents
+- **Point of Sale**: Print thermal receipts immediately after sale
+- **Archival**: Maintain readable copies for long-term storage
+
+## Performance Considerations
+
+<Warning>
+**PDF Generation Performance:**
+
+PDF generation can be resource-intensive. To optimize:
+
+- PDFs are cached after first generation
+- Use the download endpoint instead of generate endpoint when possible
+- Consider generating PDFs asynchronously for batch operations
+- Optimize template complexity for ticket format
+- Pre-generate PDFs during off-peak hours for historical documents
+</Warning>
+
+## Best Practices
+
+1. **Cache PDFs**: Store generated PDFs to avoid regeneration
+2. **Async Generation**: Generate PDFs in background jobs for large batches
+3. **Format Selection**: Use appropriate format for delivery method
+   - A4 for email/formal documents
+   - Ticket for point-of-sale printing
+4. **Email Delivery**: Attach PDF with XML for complete documentation
+5. **Storage**: Keep PDFs with XML/CDR for complete audit trail
+
+## Troubleshooting
+
+### PDF Generation Fails
+
+If PDF generation fails:
+
+1. Check if wkhtmltopdf or PDF library is installed
+2. Verify template files exist
+3. Check company logo path is valid
+4. Ensure sufficient disk space
+5. Review application logs for detailed errors
+
+### PDF Appears Blank or Incomplete
+
+1. Verify all required document data is present
+2. Check company configuration is complete
+3. Review template syntax for errors
+4. Ensure CSS/assets are accessible
+
+### QR Code Not Generating
+
+1. Verify document was sent to SUNAT (hash required)
+2. Check QR code library is installed
+3. Ensure all QR data fields are populated
+
+## Related Endpoints
+
+- [Create Invoice](/api/documents/create-invoice) - Create the invoice
+- [Create Boleta](/api/documents/create-boleta) - Create the boleta
+- [Send to SUNAT](/api/documents/send-to-sunat) - Required for QR code generation
+- [Download XML](/api/documents/download-xml) - Download XML version
+- [Download CDR](/api/documents/download-cdr) - Download SUNAT receipt

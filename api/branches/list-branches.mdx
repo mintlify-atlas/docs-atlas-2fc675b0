@@ -1,0 +1,273 @@
+---
+title: "List Branches"
+api: "GET /api/v1/branches"
+---
+
+Retrieve a list of all branches in the system, optionally filtered by company.
+
+## Authentication
+
+This endpoint requires authentication. Include your API token in the request header:
+
+```bash
+Authorization: Bearer YOUR_API_TOKEN
+```
+
+## Query Parameters
+
+<ParamField query="company_id" type="integer">
+  Filter branches by company ID. If not provided, returns all branches.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="array" required>
+  Array of branch objects
+  
+  <Expandable title="Branch Object">
+    <ResponseField name="id" type="integer">
+      Unique identifier for the branch
+    </ResponseField>
+    
+    <ResponseField name="company_id" type="integer">
+      ID of the parent company
+    </ResponseField>
+    
+    <ResponseField name="codigo" type="string">
+      Branch code (max 10 characters)
+    </ResponseField>
+    
+    <ResponseField name="nombre" type="string">
+      Branch name
+    </ResponseField>
+    
+    <ResponseField name="direccion" type="string">
+      Branch address
+    </ResponseField>
+    
+    <ResponseField name="ubigeo" type="string">
+      6-digit UBIGEO code
+    </ResponseField>
+    
+    <ResponseField name="distrito" type="string">
+      District
+    </ResponseField>
+    
+    <ResponseField name="provincia" type="string">
+      Province
+    </ResponseField>
+    
+    <ResponseField name="departamento" type="string">
+      Department/region
+    </ResponseField>
+    
+    <ResponseField name="telefono" type="string">
+      Phone number
+    </ResponseField>
+    
+    <ResponseField name="email" type="string">
+      Branch email address
+    </ResponseField>
+    
+    <ResponseField name="series_factura" type="array">
+      Invoice series codes
+    </ResponseField>
+    
+    <ResponseField name="series_boleta" type="array">
+      Sales receipt series codes
+    </ResponseField>
+    
+    <ResponseField name="series_nota_credito" type="array">
+      Credit note series codes
+    </ResponseField>
+    
+    <ResponseField name="series_nota_debito" type="array">
+      Debit note series codes
+    </ResponseField>
+    
+    <ResponseField name="series_guia_remision" type="array">
+      Dispatch guide series codes
+    </ResponseField>
+    
+    <ResponseField name="activo" type="boolean">
+      Active status
+    </ResponseField>
+    
+    <ResponseField name="company" type="object">
+      Parent company basic information
+      
+      <Expandable title="Company Details">
+        <ResponseField name="id" type="integer">
+          Company ID
+        </ResponseField>
+        
+        <ResponseField name="ruc" type="string">
+          Company RUC
+        </ResponseField>
+        
+        <ResponseField name="razon_social" type="string">
+          Company legal name
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="string">
+      Creation timestamp
+    </ResponseField>
+    
+    <ResponseField name="updated_at" type="string">
+      Last update timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="meta" type="object" required>
+  Metadata about the branches
+  
+  <Expandable title="Meta Object">
+    <ResponseField name="total" type="integer">
+      Total number of branches returned
+    </ResponseField>
+    
+    <ResponseField name="companies_count" type="integer">
+      Number of unique companies represented
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash cURL (All Branches)
+curl -X GET https://api.yourdomain.com/api/v1/branches \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Accept: application/json"
+```
+
+```bash cURL (Filtered by Company)
+curl -X GET "https://api.yourdomain.com/api/v1/branches?company_id=1" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Accept: application/json"
+```
+
+```php PHP
+$client = new \GuzzleHttp\Client();
+
+$response = $client->request('GET', 'https://api.yourdomain.com/api/v1/branches', [
+  'headers' => [
+    'Authorization' => 'Bearer YOUR_API_TOKEN',
+    'Accept' => 'application/json',
+  ],
+  'query' => [
+    'company_id' => 1,
+  ],
+]);
+
+echo $response->getBody();
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.yourdomain.com/api/v1/branches?company_id=1',
+  {
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer YOUR_API_TOKEN',
+      'Accept': 'application/json'
+    }
+  }
+);
+
+const data = await response.json();
+console.log(data);
+```
+
+## Example Response
+
+```json 200 OK
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "company_id": 1,
+      "codigo": "0001",
+      "nombre": "Sucursal Principal",
+      "direccion": "Av. Los Olivos 123",
+      "ubigeo": "150101",
+      "distrito": "San Isidro",
+      "provincia": "Lima",
+      "departamento": "Lima",
+      "telefono": "01-1234567",
+      "email": "principal@democorp.com",
+      "series_factura": ["F001", "F002"],
+      "series_boleta": ["B001"],
+      "series_nota_credito": ["FC01"],
+      "series_nota_debito": ["FD01"],
+      "series_guia_remision": ["T001"],
+      "activo": true,
+      "company": {
+        "id": 1,
+        "ruc": "20123456789",
+        "razon_social": "EMPRESA DEMO S.A.C."
+      },
+      "created_at": "2024-01-15T10:30:00.000000Z",
+      "updated_at": "2024-03-01T15:45:00.000000Z"
+    },
+    {
+      "id": 2,
+      "company_id": 1,
+      "codigo": "0002",
+      "nombre": "Sucursal Norte",
+      "direccion": "Av. Túpac Amaru 456",
+      "ubigeo": "150102",
+      "distrito": "Independencia",
+      "provincia": "Lima",
+      "departamento": "Lima",
+      "telefono": "01-9876543",
+      "email": "norte@democorp.com",
+      "series_factura": ["F003"],
+      "series_boleta": ["B002"],
+      "series_nota_credito": ["FC02"],
+      "series_nota_debito": ["FD02"],
+      "series_guia_remision": ["T002"],
+      "activo": true,
+      "company": {
+        "id": 1,
+        "ruc": "20123456789",
+        "razon_social": "EMPRESA DEMO S.A.C."
+      },
+      "created_at": "2024-02-10T11:20:00.000000Z",
+      "updated_at": "2024-02-10T11:20:00.000000Z"
+    }
+  ],
+  "meta": {
+    "total": 2,
+    "companies_count": 1
+  }
+}
+```
+
+```json 500 Error
+{
+  "success": false,
+  "message": "Error al obtener sucursales: Database connection failed"
+}
+```
+
+## Alternative Endpoint
+
+You can also retrieve branches for a specific company using:
+
+```bash
+GET /api/v1/companies/{company_id}/branches
+```
+
+This endpoint returns the same branch structure but is scoped to a single company.
+
+<Note>
+Branches are automatically loaded with their parent company's basic information (id, ruc, razon_social) for reference.
+</Note>

@@ -1,0 +1,619 @@
+---
+title: 'Correlatives Management'
+api: 'GET /api/v1/branches/{branch}/correlatives'
+description: 'Manage document number sequences (correlatives) for electronic invoicing'
+---
+
+## Overview
+
+Correlatives are sequential document numbering systems required by SUNAT for electronic invoicing in Peru. Each document type (Invoice, Boleta, Credit Note, etc.) requires its own series and correlative counter per branch.
+
+### What are Correlatives?
+
+In Peruvian electronic invoicing, every document must have a unique identifier composed of:
+- **Serie**: A 4-character alphanumeric code (e.g., "F001", "B001")
+- **Correlativo**: A sequential number (e.g., 000001, 000002)
+- **Complete Number**: Combination in format `{serie}-{correlativo}` (e.g., "F001-000001")
+
+Each branch location manages its own set of correlatives, and they must be unique per document type and series combination.
+
+<Info>
+  Correlatives are automatically incremented when creating new documents. You can manually set the starting number when creating a new correlative.
+</Info>
+
+## List Correlatives
+
+<api method="GET" endpoint="/api/v1/branches/{branch}/correlatives" />
+
+Retrieves all correlatives configured for a specific branch.
+
+### Path Parameters
+
+<ParamField path="branch" type="integer" required>
+  The branch ID to retrieve correlatives for
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="branch" type="object">
+    Information about the branch
+    <ResponseField name="id" type="integer">
+      Branch ID
+    </ResponseField>
+    <ResponseField name="codigo" type="string">
+      Branch code (e.g., "0000")
+    </ResponseField>
+    <ResponseField name="nombre" type="string">
+      Branch name
+    </ResponseField>
+    <ResponseField name="company_id" type="integer">
+      Company ID this branch belongs to
+    </ResponseField>
+  </ResponseField>
+
+  <ResponseField name="correlatives" type="array">
+    List of correlatives for the branch
+    <ResponseField name="id" type="integer">
+      Correlative ID
+    </ResponseField>
+    <ResponseField name="branch_id" type="integer">
+      Branch ID
+    </ResponseField>
+    <ResponseField name="tipo_documento" type="string">
+      Document type code (01, 03, 07, 08, etc.)
+    </ResponseField>
+    <ResponseField name="tipo_documento_nombre" type="string">
+      Document type name in Spanish
+    </ResponseField>
+    <ResponseField name="serie" type="string">
+      Series code (4 characters max)
+    </ResponseField>
+    <ResponseField name="correlativo_actual" type="integer">
+      Current correlative number
+    </ResponseField>
+    <ResponseField name="numero_completo" type="string">
+      Full document number (serie-correlativo)
+    </ResponseField>
+    <ResponseField name="proximo_numero" type="string">
+      Next available document number
+    </ResponseField>
+    <ResponseField name="created_at" type="timestamp">
+      Creation timestamp
+    </ResponseField>
+    <ResponseField name="updated_at" type="timestamp">
+      Last update timestamp
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="meta" type="object">
+  <ResponseField name="total" type="integer">
+    Total number of correlatives
+  </ResponseField>
+  <ResponseField name="tipos_disponibles" type="object">
+    Available document types with codes and names
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/api/v1/branches/1/correlatives" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "branch": {
+      "id": 1,
+      "codigo": "0000",
+      "nombre": "Sucursal Principal",
+      "company_id": 1
+    },
+    "correlatives": [
+      {
+        "id": 1,
+        "branch_id": 1,
+        "tipo_documento": "01",
+        "tipo_documento_nombre": "Factura",
+        "serie": "F001",
+        "correlativo_actual": 125,
+        "numero_completo": "F001-000125",
+        "proximo_numero": "F001-000126",
+        "created_at": "2024-01-15T10:30:00Z",
+        "updated_at": "2024-03-05T14:22:00Z"
+      },
+      {
+        "id": 2,
+        "branch_id": 1,
+        "tipo_documento": "03",
+        "tipo_documento_nombre": "Boleta de Venta",
+        "serie": "B001",
+        "correlativo_actual": 458,
+        "numero_completo": "B001-000458",
+        "proximo_numero": "B001-000459",
+        "created_at": "2024-01-15T10:30:00Z",
+        "updated_at": "2024-03-05T15:10:00Z"
+      }
+    ]
+  },
+  "meta": {
+    "total": 2,
+    "tipos_disponibles": {
+      "01": "Factura",
+      "03": "Boleta de Venta",
+      "07": "Nota de Crédito",
+      "08": "Nota de Débito",
+      "09": "Guía de Remisión",
+      "20": "Comprobante de Retención",
+      "RC": "Resumen de Anulaciones",
+      "RA": "Resumen Diario"
+    }
+  }
+}
+```
+
+---
+
+## Create Correlative
+
+<api method="POST" endpoint="/api/v1/branches/{branch}/correlatives" />
+
+Creates a new correlative for a specific branch.
+
+### Path Parameters
+
+<ParamField path="branch" type="integer" required>
+  The branch ID to create the correlative for
+</ParamField>
+
+### Request Body
+
+<ParamField body="tipo_documento" type="string" required>
+  Document type code. Valid values: `01`, `03`, `07`, `08`, `09`, `20`, `RC`, `RA`
+</ParamField>
+
+<ParamField body="serie" type="string" required>
+  Series code (max 4 alphanumeric characters, uppercase). Example: "F001", "B002"
+</ParamField>
+
+<ParamField body="correlativo_inicial" type="integer" default="0">
+  Starting correlative number (0-99999999). Defaults to 0 if not provided
+</ParamField>
+
+<Note>
+  The combination of `branch_id`, `tipo_documento`, and `serie` must be unique. You cannot create duplicate correlatives.
+</Note>
+
+### Document Type Codes
+
+<Accordion title="SUNAT Document Type Reference">
+  - **01**: Factura (Invoice)
+  - **03**: Boleta de Venta (Sales Receipt)
+  - **07**: Nota de Crédito (Credit Note)
+  - **08**: Nota de Débito (Debit Note)
+  - **09**: Guía de Remisión (Delivery Guide)
+  - **20**: Comprobante de Retención (Retention Voucher)
+  - **RC**: Resumen de Anulaciones (Voided Summary)
+  - **RA**: Resumen Diario (Daily Summary)
+</Accordion>
+
+### Example Request
+
+```bash
+curl -X POST "https://api.example.com/api/v1/branches/1/correlatives" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tipo_documento": "01",
+    "serie": "F001",
+    "correlativo_inicial": 0
+  }'
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Correlativo creado exitosamente",
+  "data": {
+    "id": 3,
+    "branch_id": 1,
+    "tipo_documento": "01",
+    "tipo_documento_nombre": "Factura",
+    "serie": "F001",
+    "correlativo_actual": 0,
+    "numero_completo": "F001-000000",
+    "proximo_numero": "F001-000001"
+  }
+}
+```
+
+---
+
+## Update Correlative
+
+<api method="PUT" endpoint="/api/v1/branches/{branch}/correlatives/{correlative}" />
+
+Updates an existing correlative configuration.
+
+### Path Parameters
+
+<ParamField path="branch" type="integer" required>
+  The branch ID
+</ParamField>
+
+<ParamField path="correlative" type="integer" required>
+  The correlative ID to update
+</ParamField>
+
+### Request Body
+
+<ParamField body="tipo_documento" type="string" required>
+  Document type code
+</ParamField>
+
+<ParamField body="serie" type="string" required>
+  Series code (max 4 alphanumeric characters)
+</ParamField>
+
+<ParamField body="correlativo_actual" type="integer" required>
+  Current correlative number (0-99999999)
+</ParamField>
+
+<Warning>
+  Changing the `correlativo_actual` value should be done carefully as it affects document numbering. Make sure the new value doesn't conflict with existing documents.
+</Warning>
+
+### Example Request
+
+```bash
+curl -X PUT "https://api.example.com/api/v1/branches/1/correlatives/3" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tipo_documento": "01",
+    "serie": "F001",
+    "correlativo_actual": 100
+  }'
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Correlativo actualizado exitosamente",
+  "data": {
+    "id": 3,
+    "branch_id": 1,
+    "tipo_documento": "01",
+    "tipo_documento_nombre": "Factura",
+    "serie": "F001",
+    "correlativo_actual": 100,
+    "numero_completo": "F001-000100",
+    "proximo_numero": "F001-000101"
+  }
+}
+```
+
+---
+
+## Delete Correlative
+
+<api method="DELETE" endpoint="/api/v1/branches/{branch}/correlatives/{correlative}" />
+
+Deletes a correlative from a branch.
+
+### Path Parameters
+
+<ParamField path="branch" type="integer" required>
+  The branch ID
+</ParamField>
+
+<ParamField path="correlative" type="integer" required>
+  The correlative ID to delete
+</ParamField>
+
+<Warning>
+  Use with caution. Deleting a correlative that has been used for existing documents may cause issues with document references.
+</Warning>
+
+### Example Request
+
+```bash
+curl -X DELETE "https://api.example.com/api/v1/branches/1/correlatives/3" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Correlativo eliminado exitosamente"
+}
+```
+
+---
+
+## Batch Create Correlatives
+
+<api method="POST" endpoint="/api/v1/branches/{branch}/correlatives/batch" />
+
+Creates multiple correlatives at once for a branch.
+
+### Path Parameters
+
+<ParamField path="branch" type="integer" required>
+  The branch ID
+</ParamField>
+
+### Request Body
+
+<ParamField body="correlativos" type="array" required>
+  Array of correlative objects to create
+  <ParamField body="tipo_documento" type="string" required>
+    Document type code
+  </ParamField>
+  <ParamField body="serie" type="string" required>
+    Series code
+  </ParamField>
+  <ParamField body="correlativo_inicial" type="integer" default="0">
+    Starting correlative number
+  </ParamField>
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://api.example.com/api/v1/branches/1/correlatives/batch" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "correlativos": [
+      {
+        "tipo_documento": "01",
+        "serie": "F001",
+        "correlativo_inicial": 0
+      },
+      {
+        "tipo_documento": "03",
+        "serie": "B001",
+        "correlativo_inicial": 0
+      },
+      {
+        "tipo_documento": "07",
+        "serie": "FC01",
+        "correlativo_inicial": 0
+      }
+    ]
+  }'
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "message": "3 correlativos creados exitosamente",
+  "data": {
+    "created": [
+      {
+        "id": 4,
+        "tipo_documento": "01",
+        "tipo_documento_nombre": "Factura",
+        "serie": "F001",
+        "correlativo_actual": 0,
+        "numero_completo": "F001-000000"
+      },
+      {
+        "id": 5,
+        "tipo_documento": "03",
+        "tipo_documento_nombre": "Boleta de Venta",
+        "serie": "B001",
+        "correlativo_actual": 0,
+        "numero_completo": "B001-000000"
+      },
+      {
+        "id": 6,
+        "tipo_documento": "07",
+        "tipo_documento_nombre": "Nota de Crédito",
+        "serie": "FC01",
+        "correlativo_actual": 0,
+        "numero_completo": "FC01-000000"
+      }
+    ],
+    "errors": []
+  },
+  "meta": {
+    "created_count": 3,
+    "error_count": 0,
+    "total_requested": 3
+  }
+}
+```
+
+---
+
+## Increment Correlative
+
+<api method="POST" endpoint="/api/v1/branches/{branch}/correlatives/{correlative}/increment" />
+
+Manually increments a correlative counter. This is typically used internally by the system when creating documents.
+
+### Path Parameters
+
+<ParamField path="branch" type="integer" required>
+  The branch ID
+</ParamField>
+
+<ParamField path="correlative" type="integer" required>
+  The correlative ID to increment
+</ParamField>
+
+<Note>
+  This endpoint is usually called automatically by the system when creating new documents. Manual use should be rare and done carefully.
+</Note>
+
+### Example Request
+
+```bash
+curl -X POST "https://api.example.com/api/v1/branches/1/correlatives/4/increment" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Correlativo incrementado exitosamente",
+  "data": {
+    "id": 4,
+    "serie": "F001",
+    "correlativo_anterior": 100,
+    "correlativo_actual": 101,
+    "numero_usado": "F001-000101",
+    "proximo_numero": "F001-000102"
+  }
+}
+```
+
+---
+
+## Get Document Types
+
+<api method="GET" endpoint="/api/v1/correlatives/document-types" />
+
+Retrieves a list of all available document types for correlatives.
+
+### Example Request
+
+```bash
+curl -X GET "https://api.example.com/api/v1/correlatives/document-types" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "codigo": "01",
+      "nombre": "Factura"
+    },
+    {
+      "codigo": "03",
+      "nombre": "Boleta de Venta"
+    },
+    {
+      "codigo": "07",
+      "nombre": "Nota de Crédito"
+    },
+    {
+      "codigo": "08",
+      "nombre": "Nota de Débito"
+    },
+    {
+      "codigo": "09",
+      "nombre": "Guía de Remisión"
+    },
+    {
+      "codigo": "20",
+      "nombre": "Comprobante de Retención"
+    },
+    {
+      "codigo": "RC",
+      "nombre": "Resumen de Anulaciones"
+    },
+    {
+      "codigo": "RA",
+      "nombre": "Resumen Diario"
+    }
+  ]
+}
+```
+
+---
+
+## Error Responses
+
+### Validation Error
+
+```json
+{
+  "success": false,
+  "message": "Errores de validación",
+  "errors": {
+    "tipo_documento": [
+      "El campo tipo_documento es obligatorio."
+    ],
+    "serie": [
+      "El campo serie debe tener máximo 4 caracteres."
+    ]
+  }
+}
+```
+
+### Duplicate Correlative
+
+```json
+{
+  "success": false,
+  "message": "Ya existe un correlativo para esta sucursal con el mismo tipo de documento y serie"
+}
+```
+
+### Correlative Not Found
+
+```json
+{
+  "success": false,
+  "message": "El correlativo no pertenece a esta sucursal"
+}
+```
+
+## Best Practices
+
+<Accordion title="Series Naming Conventions">
+  Follow these conventions for series codes:
+  - **Facturas (01)**: F001, F002, F003...
+  - **Boletas (03)**: B001, B002, B003...
+  - **Notas de Crédito (07)**: FC01, BC01 (F=Factura, B=Boleta, C=Crédito)
+  - **Notas de Débito (08)**: FD01, BD01 (F=Factura, B=Boleta, D=Débito)
+  - **Guías (09)**: T001, T002 (T=Traslado)
+</Accordion>
+
+<Accordion title="Correlative Management Tips">
+  - Create correlatives during branch setup
+  - Use batch creation to set up multiple series at once
+  - Set appropriate starting numbers for each series
+  - Monitor correlative usage regularly
+  - Keep backup records of correlative configurations
+  - Never manually modify correlatives that are actively in use
+</Accordion>
+
+<Accordion title="SUNAT Compliance">
+  - Each document type requires a separate series
+  - Series must be unique per branch
+  - Correlatives must be sequential without gaps
+  - Once a number is used, it cannot be reused
+  - Keep audit trails of all correlative changes
+</Accordion>

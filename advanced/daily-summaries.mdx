@@ -1,0 +1,704 @@
+---
+title: "Daily Summaries (Resúmenes Diarios)"
+description: "Generate and send daily summary documents for boletas and other batch operations"
+---
+
+## Overview
+
+Daily summaries (Resúmenes Diarios) are special documents used to send **boletas** (sales receipts) to SUNAT in batches. Instead of sending each boleta individually, you group them by emission date and send one summary document.
+
+<Info>
+Daily summaries use the **RC** (Resumen de Comprobantes) document type and follow an **asynchronous** processing model - you receive a ticket and must query for the final CDR.
+</Info>
+
+## Why Use Daily Summaries?
+
+<AccordionGroup>
+<Accordion title="Legal Requirement">
+SUNAT **requires** boletas to be sent via daily summaries unless using immediate boletas (which require higher security).
+</Accordion>
+
+<Accordion title="Performance">
+Sending hundreds of boletas individually would be slow and inefficient. Summaries allow batch processing.
+</Accordion>
+
+<Accordion title="Deadline">
+Daily summaries must be sent **within 3 calendar days** of the boleta emission date (not counting the emission day itself).
+</Accordion>
+
+<Accordion title="Modifications">
+You can include document modifications (annulments) in the same summary.
+</Accordion>
+</AccordionGroup>
+
+## Document Structure
+
+### Summary Naming Convention
+
+```
+RC-{YYYYMMDD}-{NNN}
+
+Examples:
+RC-20250902-001  (First summary for September 2, 2025)
+RC-20250902-002  (Second summary for September 2, 2025)
+```
+
+### Creating a Daily Summary
+
+<CodeGroup>
+```php DocumentService.php:647-676
+public function createDailySummary(array $data): DailySummary
+{
+    return DB::transaction(function () use ($data) {
+        // Validate and get entities
+        $company = Company::findOrFail($data['company_id']);
+        $branch = Branch::where('company_id', $company->id)
+                       ->where('id', $data['branch_id'])
+                       ->firstOrFail();
+        
+        // Get next correlative for summaries
+        $correlativo = $this->getNextSummaryCorrelative($company->id, $data['fecha_resumen']);
+        
+        // Create daily summary
+        $summary = DailySummary::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'correlativo' => $correlativo,
+            'fecha_generacion' => $data['fecha_generacion'],
+            'fecha_resumen' => $data['fecha_resumen'],
+            'ubl_version' => $data['ubl_version'] ?? '2.1',
+            'moneda' => $data['moneda'] ?? 'PEN',
+            'estado_proceso' => 'GENERADO',
+            'detalles' => $data['detalles'],
+            'estado_sunat' => 'PENDIENTE',
+            'usuario_creacion' => $data['usuario_creacion'] ?? null,
+        ]);
+
+        return $summary;
+    });
+}
+```
+</CodeGroup>
+
+### Automatic Summary from Boletas
+
+<CodeGroup>
+```php DocumentService.php:797-848
+public function createSummaryFromBoletas(array $data): DailySummary
+{
+    return DB::transaction(function () use ($data) {
+        // Get boletas by date range and company
+        $boletas = Boleta::where('company_id', $data['company_id'])
+                        ->where('branch_id', $data['branch_id'])
+                        ->whereDate('fecha_emision', $data['fecha_resumen'])
+                        ->where('estado_sunat', 'PENDIENTE')
+                        ->whereNull('daily_summary_id') // Only boletas not in summary
+                        ->get();
+        
+        if ($boletas->isEmpty()) {
+            throw new Exception('No pending boletas for selected date');
+        }
+        
+        // Create summary details from boletas
+        $detalles = [];
+        foreach ($boletas as $boleta) {
+            $detalles[] = [
+                'tipo_documento' => $boleta->tipo_documento,
+                'serie_numero' => $boleta->serie . '-' . $boleta->correlativo,
+                'estado' => '1', // Status 1 = Addition
+                'cliente_tipo' => $boleta->client->tipo_documento ?? '1',
+                'cliente_numero' => $boleta->client->numero_documento ?? '00000000',
+                'total' => $boleta->mto_imp_venta,
+                'mto_oper_gravadas' => $boleta->mto_oper_gravadas,
+                'mto_oper_exoneradas' => $boleta->mto_oper_exoneradas,
+                'mto_oper_inafectas' => $boleta->mto_oper_inafectas,
+                'mto_oper_gratuitas' => $boleta->mto_oper_gratuitas,
+                'mto_igv' => $boleta->mto_igv,
+                'mto_isc' => $boleta->mto_isc ?? 0,
+                'mto_icbper' => $boleta->mto_icbper ?? 0,
+            ];
+        }
+        
+        // Data for summary
+        $summaryData = array_merge($data, [
+            'detalles' => $detalles,
+            'fecha_generacion' => now()->toDateString(),
+        ]);
+        
+        // Create summary
+        $summary = $this->createDailySummary($summaryData);
+        
+        // Link boletas to summary
+        foreach ($boletas as $boleta) {
+            $boleta->update(['daily_summary_id' => $summary->id]);
+        }
+        
+        return $summary;
+    });
+}
+```
+</CodeGroup>
+
+## Greenter Implementation
+
+### Creating Summary Object
+
+<CodeGroup>
+```php GreenterService.php:812-884
+public function createSummary(array $summaryData): Summary
+{
+    $summary = new Summary();
+    
+    // Basic configuration
+    $summary->setFecGeneracion(new \DateTime($summaryData['fecha_resumen']))
+            ->setFecResumen(new \DateTime($summaryData['fecha_generacion']))
+            ->setCorrelativo($summaryData['correlativo'])
+            ->setCompany($this->getGreenterCompany());
+
+    // Create summary details
+    $details = [];
+    foreach ($summaryData['detalles'] as $detalleData) {
+        $detail = new SummaryDetail();
+        
+        $detail->setTipoDoc($detalleData['tipo_documento'])
+               ->setSerieNro($detalleData['serie_numero'])
+               ->setEstado($detalleData['estado'])
+               ->setClienteTipo($detalleData['cliente_tipo'])
+               ->setClienteNro($detalleData['cliente_numero'])
+               ->setTotal($detalleData['total'])
+               ->setMtoOperGravadas($detalleData['mto_oper_gravadas'] ?? 0)
+               ->setMtoOperExoneradas($detalleData['mto_oper_exoneradas'] ?? 0)
+               ->setMtoOperInafectas($detalleData['mto_oper_inafectas'] ?? 0)
+               ->setMtoIGV($detalleData['mto_igv'] ?? 0);
+
+        // Optional fields
+        if (isset($detalleData['mto_oper_exportacion'])) {
+            $detail->setMtoOperExportacion($detalleData['mto_oper_exportacion']);
+        }
+
+        if (isset($detalleData['mto_oper_gratuitas'])) {
+            $detail->setMtoOperGratuitas($detalleData['mto_oper_gratuitas']);
+        }
+
+        if (isset($detalleData['mto_isc'])) {
+            $detail->setMtoISC($detalleData['mto_isc']);
+        }
+
+        if (isset($detalleData['mto_icbper'])) {
+            $detail->setMtoICBPER($detalleData['mto_icbper']);
+        }
+
+        if (isset($detalleData['mto_otros_cargos'])) {
+            $detail->setMtoOtrosCargos($detalleData['mto_otros_cargos']);
+        }
+
+        // Referenced document (for credit/debit notes)
+        if (isset($detalleData['documento_referencia']) && !empty($detalleData['documento_referencia'])) {
+            $docRef = new \Greenter\Model\Sale\Document();
+            $docRef->setTipoDoc($detalleData['documento_referencia']['tipo_documento'])
+                   ->setNroDoc($detalleData['documento_referencia']['numero_documento']);
+            $detail->setDocReferencia($docRef);
+        }
+
+        // Perception (optional)
+        if (isset($detalleData['percepcion']) && !empty($detalleData['percepcion'])) {
+            $percepcion = new SummaryPerception();
+            $percepcion->setCodReg($detalleData['percepcion']['cod_regimen'])
+                      ->setTasa($detalleData['percepcion']['tasa'])
+                      ->setMtoBase($detalleData['percepcion']['monto_base'])
+                      ->setMto($detalleData['percepcion']['monto'])
+                      ->setMtoTotal($detalleData['percepcion']['monto_total']);
+            $detail->setPercepcion($percepcion);
+        }
+
+        $details[] = $detail;
+    }
+
+    $summary->setDetails($details);
+
+    return $summary;
+}
+```
+</CodeGroup>
+
+## Asynchronous Processing
+
+### Sending to SUNAT
+
+Daily summaries use **asynchronous processing** - SUNAT returns a ticket instead of immediate CDR:
+
+<CodeGroup>
+```php DocumentService.php:678-737
+public function sendDailySummaryToSunat(DailySummary $summary): array
+{
+    try {
+        $company = $summary->company;
+        $greenterService = new GreenterService($company);
+        
+        // Prepare data for Greenter
+        $summaryData = $this->prepareSummaryData($summary);
+        
+        // Create Greenter document
+        $greenterSummary = $greenterService->createSummary($summaryData);
+        
+        // Send to SUNAT
+        $result = $greenterService->sendSummaryDocument($greenterSummary);
+        
+        if ($result['success']) {
+            // Save files
+            $xmlPath = $this->fileService->saveXml($summary, $result['xml']);
+            
+            // Update summary
+            $summary->update([
+                'xml_path' => $xmlPath,
+                'estado_proceso' => 'ENVIADO',
+                'estado_sunat' => 'PROCESANDO',
+                'ticket' => $result['ticket'],
+                'codigo_hash' => $this->extractHashFromXml($result['xml']),
+            ]);
+            
+            return [
+                'success' => true,
+                'document' => $summary->fresh(),
+                'ticket' => $result['ticket']
+            ];
+        } else {
+            // Update error status
+            $summary->update([
+                'estado_proceso' => 'ERROR',
+                'respuesta_sunat' => json_encode($result['error'])
+            ]);
+            
+            return [
+                'success' => false,
+                'document' => $summary->fresh(),
+                'error' => $result['error']
+            ];
+        }
+        
+    } catch (Exception $e) {
+        $summary->update([
+            'estado_proceso' => 'ERROR',
+            'respuesta_sunat' => json_encode(['message' => $e->getMessage()])
+        ]);
+        
+        return [
+            'success' => false,
+            'document' => $summary->fresh(),
+            'error' => (object)['message' => $e->getMessage()]
+        ];
+    }
+}
+```
+
+```php GreenterService.php:887-909
+public function sendSummaryDocument($summary)
+{
+    try {
+        $result = $this->see->send($summary);
+        
+        return [
+            'success' => $result->isSuccess(),
+            'xml' => $this->see->getFactory()->getLastXml(),
+            'ticket' => $result->isSuccess() ? $result->getTicket() : null,
+            'error' => $result->isSuccess() ? null : $result->getError()
+        ];
+    } catch (Exception $e) {
+        return [
+            'success' => false,
+            'xml' => null,
+            'ticket' => null,
+            'error' => (object)[
+                'code' => 'EXCEPTION',
+                'message' => $e->getMessage()
+            ]
+        ];
+    }
+}
+```
+</CodeGroup>
+
+<Note>
+After sending, the summary enters `PROCESANDO` status. You must **poll for the CDR** using the ticket.
+</Note>
+
+### Checking Summary Status
+
+<CodeGroup>
+```php DocumentService.php:739-795
+public function checkSummaryStatus(DailySummary $summary): array
+{
+    try {
+        if (empty($summary->ticket)) {
+            return [
+                'success' => false,
+                'error' => 'No ticket available for query'
+            ];
+        }
+        
+        $company = $summary->company;
+        $greenterService = new GreenterService($company);
+        
+        $result = $greenterService->checkSummaryStatus($summary->ticket);
+        
+        if ($result['success'] && $result['cdr_response']) {
+            // Save CDR
+            $cdrPath = $this->fileService->saveCdr($summary, $result['cdr_zip']);
+            
+            // Update status
+            $summary->update([
+                'cdr_path' => $cdrPath,
+                'estado_proceso' => 'COMPLETADO',
+                'estado_sunat' => 'ACEPTADO',
+                'respuesta_sunat' => json_encode([
+                    'code' => $result['cdr_response']->getCode(),
+                    'description' => $result['cdr_response']->getDescription()
+                ])
+            ]);
+            
+            return [
+                'success' => true,
+                'document' => $summary->fresh(),
+                'cdr_response' => $result['cdr_response']
+            ];
+        } else {
+            // Error in query
+            $summary->update([
+                'estado_proceso' => 'ERROR',
+                'estado_sunat' => 'RECHAZADO',
+                'respuesta_sunat' => json_encode($result['error'])
+            ]);
+            
+            return [
+                'success' => false,
+                'document' => $summary->fresh(),
+                'error' => $result['error']
+            ];
+        }
+        
+    } catch (Exception $e) {
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
+    }
+}
+```
+
+```php GreenterService.php:911-933
+public function checkSummaryStatus(string $ticket)
+{
+    try {
+        $result = $this->see->getStatus($ticket);
+        
+        return [
+            'success' => $result->isSuccess(),
+            'cdr_response' => $result->isSuccess() ? $result->getCdrResponse() : null,
+            'cdr_zip' => $result->isSuccess() ? $result->getCdrZip() : null,
+            'error' => $result->isSuccess() ? null : $result->getError()
+        ];
+    } catch (Exception $e) {
+        return [
+            'success' => false,
+            'cdr_response' => null,
+            'cdr_zip' => null,
+            'error' => (object)[
+                'code' => 'EXCEPTION',
+                'message' => $e->getMessage()
+            ]
+        ];
+    }
+}
+```
+</CodeGroup>
+
+### Polling Strategy
+
+<CodeGroup>
+```php Example Polling Implementation
+use Illuminate\Support\Facades\Log;
+
+public function pollSummaryStatus(
+    DailySummary $summary, 
+    int $maxAttempts = 10,
+    int $intervalSeconds = 30
+): array {
+    $attempt = 0;
+    
+    while ($attempt < $maxAttempts) {
+        $attempt++;
+        
+        Log::info("Polling summary status - Attempt {$attempt}/{$maxAttempts}", [
+            'summary_id' => $summary->id,
+            'ticket' => $summary->ticket
+        ]);
+        
+        // Check status
+        $result = $this->checkSummaryStatus($summary);
+        
+        if ($result['success']) {
+            // CDR received
+            return [
+                'success' => true,
+                'message' => 'Summary accepted',
+                'attempts' => $attempt,
+                'cdr_response' => $result['cdr_response']
+            ];
+        }
+        
+        // Check if it's still processing or actually rejected
+        $error = $result['error'];
+        if (isset($error->code) && $error->code === '98') {
+            // Code 98 = Still processing, continue polling
+            if ($attempt < $maxAttempts) {
+                sleep($intervalSeconds);
+                continue;
+            }
+        } else {
+            // Actual error, stop polling
+            return [
+                'success' => false,
+                'message' => 'Summary rejected',
+                'error' => $error,
+                'attempts' => $attempt
+            ];
+        }
+    }
+    
+    // Max attempts reached
+    return [
+        'success' => false,
+        'message' => 'Timeout waiting for CDR',
+        'attempts' => $attempt
+    ];
+}
+```
+</CodeGroup>
+
+## Summary Detail States
+
+Each item in the summary has a `estado` field:
+
+| Estado | Description | Use Case |
+|--------|-------------|----------|
+| **1** | Addition | Add new boleta to summary |
+| **2** | Modification | Modify existing boleta (rarely used) |
+| **3** | Annulment | Cancel/void a boleta |
+
+<Warning>
+To void a boleta in a summary, set `estado: '3'` and include the boleta details. This is **different** from voided documents (comunicaciones de baja).
+</Warning>
+
+## Complete Workflow Example
+
+<Steps>
+  <Step title="Create Boletas">
+    Create boletas throughout the day (estado_sunat: PENDIENTE)
+  </Step>
+  
+  <Step title="Generate Daily Summary">
+    At end of day (or within 3 days), create summary from pending boletas:
+    ```php
+    $summary = $documentService->createSummaryFromBoletas([
+        'company_id' => $company->id,
+        'branch_id' => $branch->id,
+        'fecha_resumen' => '2025-09-02',
+        'usuario_creacion' => auth()->id()
+    ]);
+    ```
+  </Step>
+  
+  <Step title="Send to SUNAT">
+    Send summary and receive ticket:
+    ```php
+    $result = $documentService->sendDailySummaryToSunat($summary);
+    $ticket = $result['ticket'];
+    ```
+  </Step>
+  
+  <Step title="Poll for CDR">
+    Wait and check status (usually takes 1-5 minutes):
+    ```php
+    // After 30-60 seconds
+    $result = $documentService->checkSummaryStatus($summary);
+    
+    if ($result['success']) {
+        // CDR received, boletas now ACEPTADO
+    }
+    ```
+  </Step>
+  
+  <Step title="Update Boletas">
+    When CDR is received, update all linked boletas:
+    ```php
+    Boleta::where('daily_summary_id', $summary->id)
+        ->update(['estado_sunat' => 'ACEPTADO']);
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+<AccordionGroup>
+<Accordion title="Timing">
+1. **Send daily** - Don't wait until the 3rd day deadline
+2. **Off-peak hours** - Send summaries at night when SUNAT is less busy
+3. **Multiple summaries** - If you have many boletas, split into multiple summaries
+4. **Consistent schedule** - Send summaries at same time each day
+</Accordion>
+
+<Accordion title="Polling">
+1. **Initial delay** - Wait 30-60 seconds before first status check
+2. **Exponential backoff** - Increase interval between polls (30s, 60s, 90s...)
+3. **Max attempts** - Don't poll forever, set reasonable limit (10-15 attempts)
+4. **Queue processing** - Use background jobs for polling
+5. **Error handling** - Distinguish between "still processing" and "rejected"
+</Accordion>
+
+<Accordion title="Data Integrity">
+1. **Link boletas** - Always link boletas to their summary via `daily_summary_id`
+2. **Atomic updates** - Use database transactions
+3. **Status tracking** - Maintain clear status workflow
+4. **Audit trail** - Log all summary operations
+5. **Reconciliation** - Verify all boletas are included in summaries
+</Accordion>
+
+<Accordion title="Error Recovery">
+1. **Retry failed summaries** - Summaries can be resent if rejected
+2. **Validate before sending** - Check all boleta data is complete
+3. **Monitor deadlines** - Alert when approaching 3-day limit
+4. **Handle partial failures** - If some boletas fail, create new summary
+5. **Document reasons** - Keep records of why summaries were rejected
+</Accordion>
+</AccordionGroup>
+
+## Automated Processing
+
+<CodeGroup>
+```php Example Scheduled Task
+use Illuminate\Console\Command;
+
+class SendDailySummaries extends Command
+{
+    protected $signature = 'sunat:send-daily-summaries {date?}';
+    protected $description = 'Send daily summaries for pending boletas';
+    
+    public function handle(DocumentService $documentService)
+    {
+        $date = $this->argument('date') ?? now()->subDay()->toDateString();
+        
+        $this->info("Processing summaries for {$date}");
+        
+        // Get all companies with pending boletas
+        $companies = Company::active()->get();
+        
+        foreach ($companies as $company) {
+            foreach ($company->branches as $branch) {
+                try {
+                    // Check if there are pending boletas
+                    $pendingCount = Boleta::where('company_id', $company->id)
+                        ->where('branch_id', $branch->id)
+                        ->whereDate('fecha_emision', $date)
+                        ->where('estado_sunat', 'PENDIENTE')
+                        ->whereNull('daily_summary_id')
+                        ->count();
+                    
+                    if ($pendingCount === 0) {
+                        continue;
+                    }
+                    
+                    $this->info("Creating summary for {$company->razon_social} - {$branch->nombre}: {$pendingCount} boletas");
+                    
+                    // Create and send summary
+                    $summary = $documentService->createSummaryFromBoletas([
+                        'company_id' => $company->id,
+                        'branch_id' => $branch->id,
+                        'fecha_resumen' => $date,
+                    ]);
+                    
+                    $result = $documentService->sendDailySummaryToSunat($summary);
+                    
+                    if ($result['success']) {
+                        $this->info("✓ Summary sent successfully. Ticket: {$result['ticket']}");
+                    } else {
+                        $this->error("✗ Failed to send summary: {$result['error']->message}");
+                    }
+                    
+                } catch (\Exception $e) {
+                    $this->error("Error processing {$company->razon_social}: {$e->getMessage()}");
+                }
+            }
+        }
+        
+        $this->info('Done!');
+    }
+}
+```
+
+```php app/Console/Kernel.php
+protected function schedule(Schedule $schedule)
+{
+    // Send daily summaries at 11 PM every night
+    $schedule->command('sunat:send-daily-summaries')
+        ->dailyAt('23:00')
+        ->timezone('America/Lima');
+    
+    // Check summary statuses every 5 minutes
+    $schedule->command('sunat:check-summary-statuses')
+        ->everyFiveMinutes();
+}
+```
+</CodeGroup>
+
+## Monitoring Dashboard
+
+<CodeGroup>
+```sql Summary Statistics Query
+-- Summary statistics for last 7 days
+SELECT 
+    DATE(fecha_resumen) as fecha,
+    COUNT(*) as total_summaries,
+    SUM(CASE WHEN estado_sunat = 'ACEPTADO' THEN 1 ELSE 0 END) as aceptados,
+    SUM(CASE WHEN estado_sunat = 'RECHAZADO' THEN 1 ELSE 0 END) as rechazados,
+    SUM(CASE WHEN estado_sunat = 'PROCESANDO' THEN 1 ELSE 0 END) as procesando,
+    COUNT(DISTINCT company_id) as companies
+FROM daily_summaries
+WHERE fecha_resumen >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+GROUP BY DATE(fecha_resumen)
+ORDER BY fecha DESC;
+```
+
+```php Example API Endpoint
+Route::get('/summaries/stats', function () {
+    $stats = DailySummary::select(
+        DB::raw('DATE(fecha_resumen) as fecha'),
+        DB::raw('COUNT(*) as total'),
+        DB::raw('SUM(CASE WHEN estado_sunat = "ACEPTADO" THEN 1 ELSE 0 END) as aceptados'),
+        DB::raw('SUM(CASE WHEN estado_sunat = "RECHAZADO" THEN 1 ELSE 0 END) as rechazados')
+    )
+    ->where('fecha_resumen', '>=', now()->subDays(7))
+    ->groupBy(DB::raw('DATE(fecha_resumen)'))
+    ->orderBy('fecha', 'desc')
+    ->get();
+    
+    return response()->json($stats);
+});
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Voided Documents" icon="ban" href="/advanced/voided-documents">
+    Learn about annulling documents with comunicaciones de baja
+  </Card>
+  <Card title="CDR Handling" icon="file-check" href="/advanced/cdr-handling">
+    Deep dive into CDR processing
+  </Card>
+  <Card title="SUNAT Integration" icon="plug" href="/advanced/sunat-integration">
+    Understand SUNAT endpoints
+  </Card>
+  <Card title="XML Signing" icon="file-signature" href="/advanced/xml-signing">
+    Digital signature implementation
+  </Card>
+</CardGroup>

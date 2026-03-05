@@ -1,0 +1,770 @@
+---
+title: "Voided Documents (Comunicaciones de Baja)"
+description: "Annul and void electronic documents using SUNAT's comunicación de baja process"
+---
+
+## Overview
+
+**Comunicaciones de Baja** (Voided Documents) are special documents used to **annul** or **void** previously issued electronic documents. When you need to cancel an invoice, boleta, credit note, or debit note that was already sent to SUNAT, you must send a voided document communication.
+
+<Warning>
+You cannot simply delete an electronic document. Once sent to SUNAT, all annulments must be done through proper voided document communications.
+</Warning>
+
+## When to Use Voided Documents
+
+<AccordionGroup>
+<Accordion title="Cancellation Scenarios">
+- Customer cancels order after invoice was issued
+- Document issued with incorrect data (cannot be corrected with a note)
+- Duplicate documents sent by error
+- Document issued to wrong client
+- Price or quantity errors that exceed note correction limits
+</Accordion>
+
+<Accordion title="Legal Requirements">
+- Voided documents must reference the **same emission date** as the documents being cancelled
+- Must be sent **same day** for invoices (01)
+- Can be sent **within 7 calendar days** for boletas (03) and notes (07/08)
+- Each voided document can cancel multiple documents
+</Accordion>
+
+<Accordion title="Restrictions">
+- Cannot void documents older than allowed timeframe
+- Cannot void documents already referenced by credit/debit notes
+- Cannot void voided documents (no double voiding)
+- Must keep voided documents in records for 5+ years
+</Accordion>
+</AccordionGroup>
+
+## Document Structure
+
+### Naming Convention
+
+```
+RA-{YYYYMMDD}-{NNN}
+
+Examples:
+RA-20250902-001  (First voided doc for September 2, 2025)
+RA-20250902-002  (Second voided doc for September 2, 2025)
+```
+
+<Note>
+The date in the identifier (`YYYYMMDD`) refers to the **emission date** of the documents being voided, not the voided document's creation date.
+</Note>
+
+## Creating Voided Documents
+
+### Greenter Implementation
+
+<CodeGroup>
+```php GreenterService.php:1191-1216
+public function createVoidedDocument(array $voidedData): Voided
+{
+    $voided = new Voided();
+    
+    // Basic configuration
+    $voided->setCorrelativo($voidedData['correlativo'])
+           ->setFecGeneracion(new \DateTime($voidedData['fecha_referencia'])) // Date of docs to annul
+           ->setFecComunicacion(new \DateTime($voidedData['fecha_emision']))  // Communication date
+           ->setCompany($this->getGreenterCompany());
+    
+    // Create details of documents to annul
+    $details = [];
+    foreach ($voidedData['detalles'] as $detalle) {
+        $detail = new VoidedDetail();
+        $detail->setTipoDoc($detalle['tipo_documento'])
+               ->setSerie($detalle['serie'])
+               ->setCorrelativo($detalle['correlativo'])
+               ->setDesMotivoBaja($detalle['motivo_especifico']);
+        
+        $details[] = $detail;
+    }
+    
+    $voided->setDetails($details);
+    
+    return $voided;
+}
+```
+</CodeGroup>
+
+### Voided Document Data Structure
+
+<ResponseField name="correlativo" type="string" required>
+  Sequential number for the voided document (001, 002, etc.)
+</ResponseField>
+
+<ResponseField name="fecha_referencia" type="date" required>
+  Emission date of the documents being voided (must match original docs)
+</ResponseField>
+
+<ResponseField name="fecha_emision" type="date" required>
+  Date when the voided document is being sent (communication date)
+</ResponseField>
+
+<ResponseField name="detalles" type="array" required>
+  Array of documents to void. Each detail includes:
+  - `tipo_documento` - Document type (01, 03, 07, 08)
+  - `serie` - Document series
+  - `correlativo` - Document correlative number
+  - `motivo_especifico` - Specific reason for annulment
+</ResponseField>
+
+## Sending to SUNAT
+
+### Asynchronous Processing
+
+Like daily summaries, voided documents use **asynchronous processing** with a ticket:
+
+<CodeGroup>
+```php GreenterService.php:1218-1241
+public function sendVoidedDocument(Voided $voided)
+{
+    try {
+        $see = $this->initializeSee();
+        $result = $see->send($voided);
+        
+        return [
+            'success' => $result->isSuccess(),
+            'xml' => $see->getFactory()->getLastXml(),
+            'ticket' => $result->isSuccess() ? $result->getTicket() : null,
+            'error' => $result->isSuccess() ? null : $result->getError()
+        ];
+    } catch (Exception $e) {
+        return [
+            'success' => false,
+            'xml' => null,
+            'ticket' => null,
+            'error' => (object)[
+                'code' => 'EXCEPTION',
+                'message' => $e->getMessage()
+            ]
+        ];
+    }
+}
+```
+
+```php GreenterService.php:1243-1266
+public function checkVoidedDocumentStatus(string $ticket)
+{
+    try {
+        $see = $this->initializeSee();
+        $result = $see->getStatus($ticket);
+        
+        return [
+            'success' => $result->isSuccess(),
+            'cdr_response' => $result->isSuccess() ? $result->getCdrResponse() : null,
+            'cdr_zip' => $result->isSuccess() ? $result->getCdrZip() : null,
+            'error' => $result->isSuccess() ? null : $result->getError()
+        ];
+    } catch (Exception $e) {
+        return [
+            'success' => false,
+            'cdr_response' => null,
+            'cdr_zip' => null,
+            'error' => (object)[
+                'code' => 'EXCEPTION',
+                'message' => $e->getMessage()
+            ]
+        ];
+    }
+}
+```
+</CodeGroup>
+
+### Complete Workflow
+
+<Steps>
+  <Step title="Identify Documents to Void">
+    Find documents to annul (must have same emission date):
+    ```php
+    $invoicesToVoid = Invoice::where('fecha_emision', '2025-09-02')
+        ->whereIn('id', [123, 124, 125])
+        ->where('estado_sunat', 'ACEPTADO')
+        ->get();
+    ```
+  </Step>
+  
+  <Step title="Create Voided Document">
+    Prepare voided document data:
+    ```php
+    $voidedData = [
+        'correlativo' => '001',
+        'fecha_referencia' => '2025-09-02', // Date of docs being voided
+        'fecha_emision' => now()->toDateString(), // Today
+        'detalles' => [
+            [
+                'tipo_documento' => '01',
+                'serie' => 'F001',
+                'correlativo' => '00000123',
+                'motivo_especifico' => 'Error en datos del cliente'
+            ],
+            [
+                'tipo_documento' => '01',
+                'serie' => 'F001',
+                'correlativo' => '00000124',
+                'motivo_especifico' => 'Duplicado por error'
+            ]
+        ]
+    ];
+    
+    $greenterService = new GreenterService($company);
+    $voidedDoc = $greenterService->createVoidedDocument($voidedData);
+    ```
+  </Step>
+  
+  <Step title="Send and Receive Ticket">
+    Send to SUNAT and get ticket:
+    ```php
+    $result = $greenterService->sendVoidedDocument($voidedDoc);
+    
+    if ($result['success']) {
+        $ticket = $result['ticket'];
+        // Save ticket for later status checking
+    }
+    ```
+  </Step>
+  
+  <Step title="Poll for CDR">
+    Wait and check status (typically 1-5 minutes):
+    ```php
+    // After 30-60 seconds
+    $statusResult = $greenterService->checkVoidedDocumentStatus($ticket);
+    
+    if ($statusResult['success']) {
+        // Voided document accepted
+        $cdr = $statusResult['cdr_response'];
+    }
+    ```
+  </Step>
+  
+  <Step title="Update Original Documents">
+    Mark original documents as voided:
+    ```php
+    foreach ($invoicesToVoid as $invoice) {
+        $invoice->update([
+            'estado_sunat' => 'ANULADO',
+            'fecha_anulacion' => now(),
+            'voided_document_id' => $voidedDocument->id
+        ]);
+    }
+    ```
+  </Step>
+</Steps>
+
+## Annulment Reasons
+
+Provide clear, specific reasons for each voided document:
+
+<AccordionGroup>
+<Accordion title="Common Motivos (Reasons)">
+- **Error en datos del cliente** - Error in client data
+- **Error en montos o cantidades** - Error in amounts or quantities
+- **Documento duplicado** - Duplicate document
+- **Emitido a cliente incorrecto** - Issued to wrong client
+- **Cancelación de operación** - Operation cancelled
+- **Emisión por error** - Issued by mistake
+- **Error en descripción de productos** - Error in product descriptions
+- **Cliente solicita anulación** - Client requests annulment
+</Accordion>
+
+<Accordion title="Reason Guidelines">
+1. **Be specific** - General reasons may be questioned
+2. **Be brief** - SUNAT may have character limits
+3. **Be consistent** - Use standard reason codes in your system
+4. **Document internally** - Keep detailed records beyond SUNAT requirement
+5. **Avoid ambiguity** - Clear reasons help with audits
+</Accordion>
+</AccordionGroup>
+
+## Voided vs. Credit Notes
+
+<Warning>
+Understand when to use voided documents versus credit notes:
+</Warning>
+
+| Scenario | Use | Reason |
+|----------|-----|--------|
+| Total cancellation same day | **Voided Document** | Completely cancels the original |
+| Partial refund | **Credit Note** | Adjusts amount, doesn't cancel |
+| Price correction | **Credit Note** | Corrects specific items |
+| Wrong client | **Voided Document** | Cannot correct client with note |
+| After deadline | **Credit Note** | Voiding deadline passed |
+| Return of goods | **Credit Note** | Proper accounting treatment |
+
+## Database Schema
+
+<CodeGroup>
+```php VoidedDocument Model
+class VoidedDocument extends Model
+{
+    protected $fillable = [
+        'company_id',
+        'branch_id',
+        'correlativo',
+        'fecha_referencia',    // Date of documents being voided
+        'fecha_emision',       // Communication date
+        'detalles',           // JSON array of documents to void
+        'ticket',             // SUNAT ticket for async processing
+        'xml_path',
+        'cdr_path',
+        'estado_sunat',       // PENDIENTE, PROCESANDO, ACEPTADO, RECHAZADO
+        'respuesta_sunat',    // JSON response
+        'codigo_hash',
+        'usuario_creacion',
+    ];
+    
+    protected $casts = [
+        'fecha_referencia' => 'date',
+        'fecha_emision' => 'date',
+        'detalles' => 'array',
+        'respuesta_sunat' => 'array',
+    ];
+    
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
+    }
+    
+    public function voidedInvoices()
+    {
+        return $this->hasMany(Invoice::class, 'voided_document_id');
+    }
+    
+    public function voidedBoletas()
+    {
+        return $this->hasMany(Boleta::class, 'voided_document_id');
+    }
+}
+```
+
+```php Migration
+Schema::create('voided_documents', function (Blueprint $table) {
+    $table->id();
+    $table->foreignId('company_id')->constrained();
+    $table->foreignId('branch_id')->constrained();
+    $table->string('correlativo', 10);
+    $table->date('fecha_referencia'); // Docs' emission date
+    $table->date('fecha_emision');    // Communication date
+    $table->json('detalles');         // Documents to void
+    $table->string('ticket', 100)->nullable();
+    $table->string('xml_path')->nullable();
+    $table->string('cdr_path')->nullable();
+    $table->enum('estado_sunat', ['PENDIENTE', 'PROCESANDO', 'ACEPTADO', 'RECHAZADO']);
+    $table->json('respuesta_sunat')->nullable();
+    $table->string('codigo_hash')->nullable();
+    $table->foreignId('usuario_creacion')->nullable();
+    $table->timestamps();
+    
+    $table->index(['company_id', 'fecha_referencia']);
+    $table->index('estado_sunat');
+});
+
+// Add voided_document_id to document tables
+Schema::table('invoices', function (Blueprint $table) {
+    $table->foreignId('voided_document_id')->nullable()->after('estado_sunat');
+    $table->dateTime('fecha_anulacion')->nullable()->after('voided_document_id');
+});
+```
+</CodeGroup>
+
+## Service Implementation
+
+<CodeGroup>
+```php DocumentService Implementation
+public function createVoidedDocument(array $data): VoidedDocument
+{
+    return DB::transaction(function () use ($data) {
+        $company = Company::findOrFail($data['company_id']);
+        $branch = Branch::where('company_id', $company->id)
+                       ->where('id', $data['branch_id'])
+                       ->firstOrFail();
+        
+        // Get next correlative for voided documents
+        $correlativo = $this->getNextVoidedCorrelative(
+            $company->id, 
+            $data['fecha_referencia']
+        );
+        
+        $voidedDocument = VoidedDocument::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'correlativo' => $correlativo,
+            'fecha_referencia' => $data['fecha_referencia'],
+            'fecha_emision' => now()->toDateString(),
+            'detalles' => $data['detalles'],
+            'estado_sunat' => 'PENDIENTE',
+            'usuario_creacion' => $data['usuario_creacion'] ?? null,
+        ]);
+        
+        return $voidedDocument;
+    });
+}
+
+public function sendVoidedDocumentToSunat(VoidedDocument $voidedDocument): array
+{
+    try {
+        $company = $voidedDocument->company;
+        $greenterService = new GreenterService($company);
+        
+        // Prepare data
+        $voidedData = [
+            'correlativo' => $voidedDocument->correlativo,
+            'fecha_referencia' => $voidedDocument->fecha_referencia->toDateString(),
+            'fecha_emision' => $voidedDocument->fecha_emision->toDateString(),
+            'detalles' => $voidedDocument->detalles,
+        ];
+        
+        // Create Greenter document
+        $greenterVoided = $greenterService->createVoidedDocument($voidedData);
+        
+        // Send to SUNAT
+        $result = $greenterService->sendVoidedDocument($greenterVoided);
+        
+        if ($result['success']) {
+            // Save XML and update status
+            $xmlPath = $this->fileService->saveXml($voidedDocument, $result['xml']);
+            
+            $voidedDocument->update([
+                'xml_path' => $xmlPath,
+                'estado_sunat' => 'PROCESANDO',
+                'ticket' => $result['ticket'],
+                'codigo_hash' => $this->extractHashFromXml($result['xml']),
+            ]);
+            
+            return [
+                'success' => true,
+                'document' => $voidedDocument->fresh(),
+                'ticket' => $result['ticket']
+            ];
+        } else {
+            $voidedDocument->update([
+                'estado_sunat' => 'RECHAZADO',
+                'respuesta_sunat' => json_encode($result['error'])
+            ]);
+            
+            return [
+                'success' => false,
+                'document' => $voidedDocument->fresh(),
+                'error' => $result['error']
+            ];
+        }
+        
+    } catch (Exception $e) {
+        $voidedDocument->update([
+            'estado_sunat' => 'RECHAZADO',
+            'respuesta_sunat' => json_encode(['message' => $e->getMessage()])
+        ]);
+        
+        return [
+            'success' => false,
+            'document' => $voidedDocument->fresh(),
+            'error' => (object)['message' => $e->getMessage()]
+        ];
+    }
+}
+
+protected function getNextVoidedCorrelative(int $companyId, string $fechaReferencia): string
+{
+    $lastVoided = VoidedDocument::where('company_id', $companyId)
+                               ->where('fecha_referencia', $fechaReferencia)
+                               ->orderBy('correlativo', 'desc')
+                               ->first();
+    
+    if (!$lastVoided) {
+        return '001';
+    }
+    
+    $nextCorrelativo = intval($lastVoided->correlativo) + 1;
+    return str_pad($nextCorrelativo, 3, '0', STR_PAD_LEFT);
+}
+```
+</CodeGroup>
+
+## Polling for Status
+
+<CodeGroup>
+```php Status Checking
+public function checkVoidedDocumentStatus(VoidedDocument $voidedDocument): array
+{
+    try {
+        if (empty($voidedDocument->ticket)) {
+            return [
+                'success' => false,
+                'error' => 'No ticket available'
+            ];
+        }
+        
+        $company = $voidedDocument->company;
+        $greenterService = new GreenterService($company);
+        
+        $result = $greenterService->checkVoidedDocumentStatus($voidedDocument->ticket);
+        
+        if ($result['success'] && $result['cdr_response']) {
+            // Save CDR
+            $cdrPath = $this->fileService->saveCdr($voidedDocument, $result['cdr_zip']);
+            
+            // Update voided document
+            $voidedDocument->update([
+                'cdr_path' => $cdrPath,
+                'estado_sunat' => 'ACEPTADO',
+                'respuesta_sunat' => json_encode([
+                    'code' => $result['cdr_response']->getCode(),
+                    'description' => $result['cdr_response']->getDescription()
+                ])
+            ]);
+            
+            // Update all documents referenced in the voided document
+            $this->updateVoidedDocuments($voidedDocument);
+            
+            return [
+                'success' => true,
+                'document' => $voidedDocument->fresh(),
+                'cdr_response' => $result['cdr_response']
+            ];
+        } else {
+            // Error or still processing
+            if (isset($result['error']->code) && $result['error']->code === '98') {
+                // Still processing, keep PROCESANDO status
+                return [
+                    'success' => false,
+                    'processing' => true,
+                    'error' => $result['error']
+                ];
+            } else {
+                // Actual error
+                $voidedDocument->update([
+                    'estado_sunat' => 'RECHAZADO',
+                    'respuesta_sunat' => json_encode($result['error'])
+                ]);
+                
+                return [
+                    'success' => false,
+                    'processing' => false,
+                    'document' => $voidedDocument->fresh(),
+                    'error' => $result['error']
+                ];
+            }
+        }
+        
+    } catch (Exception $e) {
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
+    }
+}
+
+protected function updateVoidedDocuments(VoidedDocument $voidedDocument): void
+{
+    foreach ($voidedDocument->detalles as $detalle) {
+        $tipoDoc = $detalle['tipo_documento'];
+        $serie = $detalle['serie'];
+        $correlativo = $detalle['correlativo'];
+        
+        // Find and update the original document
+        $model = match($tipoDoc) {
+            '01' => Invoice::class,
+            '03' => Boleta::class,
+            '07' => CreditNote::class,
+            '08' => DebitNote::class,
+            default => null
+        };
+        
+        if ($model) {
+            $model::where('serie', $serie)
+                ->where('correlativo', $correlativo)
+                ->update([
+                    'estado_sunat' => 'ANULADO',
+                    'voided_document_id' => $voidedDocument->id,
+                    'fecha_anulacion' => now()
+                ]);
+        }
+    }
+}
+```
+</CodeGroup>
+
+## API Endpoints
+
+<CodeGroup>
+```php Example Routes
+use App\Http\Controllers\VoidedDocumentController;
+
+Route::middleware(['auth:sanctum'])->group(function () {
+    // Create voided document
+    Route::post('/voided-documents', [VoidedDocumentController::class, 'store']);
+    
+    // Send to SUNAT
+    Route::post('/voided-documents/{voidedDocument}/send', 
+        [VoidedDocumentController::class, 'send']);
+    
+    // Check status
+    Route::get('/voided-documents/{voidedDocument}/status', 
+        [VoidedDocumentController::class, 'checkStatus']);
+    
+    // List voided documents
+    Route::get('/voided-documents', [VoidedDocumentController::class, 'index']);
+    
+    // Get details
+    Route::get('/voided-documents/{voidedDocument}', 
+        [VoidedDocumentController::class, 'show']);
+});
+```
+
+```php Controller Example
+class VoidedDocumentController extends Controller
+{
+    protected DocumentService $documentService;
+    
+    public function __construct(DocumentService $documentService)
+    {
+        $this->documentService = $documentService;
+    }
+    
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'company_id' => 'required|exists:companies,id',
+            'branch_id' => 'required|exists:branches,id',
+            'fecha_referencia' => 'required|date',
+            'detalles' => 'required|array|min:1',
+            'detalles.*.tipo_documento' => 'required|in:01,03,07,08',
+            'detalles.*.serie' => 'required|string',
+            'detalles.*.correlativo' => 'required|string',
+            'detalles.*.motivo_especifico' => 'required|string|max:255',
+        ]);
+        
+        $voidedDocument = $this->documentService->createVoidedDocument($validated);
+        
+        return response()->json([
+            'success' => true,
+            'data' => $voidedDocument
+        ], 201);
+    }
+    
+    public function send(VoidedDocument $voidedDocument)
+    {
+        if ($voidedDocument->estado_sunat !== 'PENDIENTE') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Document already sent or processed'
+            ], 400);
+        }
+        
+        $result = $this->documentService->sendVoidedDocumentToSunat($voidedDocument);
+        
+        return response()->json($result);
+    }
+    
+    public function checkStatus(VoidedDocument $voidedDocument)
+    {
+        $result = $this->documentService->checkVoidedDocumentStatus($voidedDocument);
+        
+        return response()->json($result);
+    }
+}
+```
+</CodeGroup>
+
+## Best Practices
+
+<AccordionGroup>
+<Accordion title="Timing and Deadlines">
+1. **Act quickly** - Void invoices same day if possible
+2. **Monitor deadlines** - Track 7-day limit for boletas
+3. **Batch voiding** - Group multiple documents in one voided document
+4. **Off-peak hours** - Send during low-traffic times
+5. **Alert system** - Notify when approaching deadlines
+</Accordion>
+
+<Accordion title="Documentation">
+1. **Clear reasons** - Use specific, professional motivos
+2. **Internal tracking** - Keep detailed records beyond SUNAT
+3. **Audit trail** - Log all voiding activities
+4. **Communication** - Notify clients of annulments
+5. **Financial records** - Update accounting systems
+</Accordion>
+
+<Accordion title="Error Prevention">
+1. **Validate before sending** - Check document status
+2. **Verify dates** - Ensure fecha_referencia matches
+3. **Check permissions** - Verify user authorization
+4. **Prevent duplicates** - Check if already voided
+5. **Test thoroughly** - Use Beta environment
+</Accordion>
+
+<Accordion title="Status Management">
+1. **Async processing** - Handle ticket-based workflow
+2. **Polling strategy** - Check status periodically
+3. **Update cascades** - Update all related documents
+4. **Status consistency** - Maintain data integrity
+5. **Reconciliation** - Verify voiding completed successfully
+</Accordion>
+</AccordionGroup>
+
+## Monitoring and Reporting
+
+<CodeGroup>
+```sql Voided Documents Report
+-- Voided documents in last 30 days
+SELECT 
+    vd.id,
+    vd.correlativo,
+    vd.fecha_referencia,
+    vd.fecha_emision,
+    vd.estado_sunat,
+    JSON_LENGTH(vd.detalles) as docs_voided,
+    c.razon_social as company
+FROM voided_documents vd
+JOIN companies c ON c.id = vd.company_id
+WHERE vd.fecha_emision >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+ORDER BY vd.fecha_emision DESC;
+
+-- Documents voided by type
+SELECT 
+    JSON_UNQUOTE(JSON_EXTRACT(detalle.value, '$.tipo_documento')) as tipo_doc,
+    COUNT(*) as total_voided,
+    DATE(vd.fecha_emision) as fecha
+FROM voided_documents vd
+CROSS JOIN JSON_TABLE(
+    vd.detalles, 
+    '$[*]' COLUMNS(
+        value JSON PATH '$'
+    )
+) as detalle
+WHERE vd.estado_sunat = 'ACEPTADO'
+  AND vd.fecha_emision >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+GROUP BY tipo_doc, DATE(vd.fecha_emision)
+ORDER BY fecha DESC, tipo_doc;
+```
+</CodeGroup>
+
+## Common Errors
+
+| Error Code | Description | Solution |
+|------------|-------------|----------|
+| **2324** | Invalid RUC | Verify company RUC |
+| **2800** | Invalid schema | Validate XML structure |
+| **2801** | Invalid signature | Check certificate |
+| **2117** | Date not allowed | Check voiding deadline |
+| **2118** | Document already voided | Cannot void twice |
+| **2119** | Document referenced in note | Cannot void document with notes |
+| **2335** | Document doesn't exist | Verify document was sent to SUNAT |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Daily Summaries" icon="calendar-days" href="/advanced/daily-summaries">
+    Learn about sending boletas in batches
+  </Card>
+  <Card title="CDR Handling" icon="file-check" href="/advanced/cdr-handling">
+    Process SUNAT responses
+  </Card>
+  <Card title="SUNAT Integration" icon="plug" href="/advanced/sunat-integration">
+    Understand SUNAT communication
+  </Card>
+  <Card title="XML Signing" icon="file-signature" href="/advanced/xml-signing">
+    Digital signature implementation
+  </Card>
+</CardGroup>

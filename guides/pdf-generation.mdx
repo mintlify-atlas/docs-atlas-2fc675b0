@@ -1,0 +1,487 @@
+---
+title: 'PDF Generation'
+description: 'Generate customizable PDFs for electronic documents with multiple templates and formats'
+---
+
+## Overview
+
+The API provides flexible PDF generation for all electronic documents with multiple format options, from standard A4 office documents to thermal receipt printers.
+
+## Available Formats
+
+The PDF service supports multiple paper formats optimized for different use cases:
+
+| Format | Dimensions | Best For | Description |
+|--------|-----------|----------|-------------|
+| `A4` | 210x297mm | Office/Email | Standard office format |
+| `A5` | 148x210mm | Compact reports | Half of A4, compact |
+| `80mm` | 80x200mm | Thermal printer | Standard thermal receipt |
+| `50mm` | 50x150mm | Compact thermal | Small thermal printer |
+| `ticket` | 50x150mm | POS/Retail | Optimized ticket format |
+
+## Generating PDFs
+
+### Generate and Save
+
+Generate a PDF and save it to the document:
+
+<CodeGroup>
+
+```bash Invoice PDF (A4)
+curl -X POST https://api.example.com/api/invoices/123/generate-pdf?format=A4 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```bash Boleta PDF (80mm Thermal)
+curl -X POST https://api.example.com/api/boletas/456/generate-pdf?format=80mm \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```bash Credit Note PDF (A4)
+curl -X POST https://api.example.com/api/credit-notes/50/generate-pdf?format=A4 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```bash Debit Note PDF (A4)
+curl -X POST https://api.example.com/api/debit-notes/25/generate-pdf?format=A4 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "PDF generado correctamente en formato A4",
+  "data": {
+    "pdf_path": "storage/companies/1/invoices/pdf/F001-00000123_A4.pdf",
+    "format": "A4",
+    "document_type": "invoice",
+    "document_id": 123
+  }
+}
+```
+
+### Download Directly
+
+Download a PDF without saving:
+
+```bash
+curl -X GET https://api.example.com/api/invoices/123/download-pdf?format=A4 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o invoice.pdf
+```
+
+<Note>
+If a PDF was previously generated, the download endpoint returns the saved version. Use `generate-pdf` to create a fresh copy.
+</Note>
+
+## Format Query Parameter
+
+<ParamField query="format" type="string" default="A4">
+  PDF paper format:
+  - `A4`: Standard office (210x297mm)
+  - `A5`: Compact (148x210mm)
+  - `80mm`: Thermal printer (80x200mm)
+  - `50mm`: Small thermal (50x150mm)
+  - `ticket`: Optimized ticket (50x150mm)
+</ParamField>
+
+## Get Available Formats
+
+Query all supported formats with details:
+
+```bash
+curl -X GET https://api.example.com/api/pdf/formats \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "name": "A4",
+      "width": 210,
+      "height": 297,
+      "unit": "mm",
+      "description": "Formato estándar de oficina (210x297mm)"
+    },
+    {
+      "name": "A5",
+      "width": 148,
+      "height": 210,
+      "unit": "mm",
+      "description": "Formato medio, ideal para reportes compactos (148x210mm)"
+    },
+    {
+      "name": "80mm",
+      "width": 80,
+      "height": 200,
+      "unit": "mm",
+      "description": "Formato ticket térmico estándar (80x200mm)"
+    },
+    {
+      "name": "50mm",
+      "width": 50,
+      "height": 150,
+      "unit": "mm",
+      "description": "Formato ticket térmico compacto (50x150mm)"
+    },
+    {
+      "name": "ticket",
+      "width": 50,
+      "height": 150,
+      "unit": "mm",
+      "description": "Formato ticket optimizado (50x150mm)"
+    }
+  ],
+  "message": "Formatos disponibles obtenidos correctamente"
+}
+```
+
+## PDF Contents
+
+All PDFs include:
+
+### Header Section
+- Company logo (if configured)
+- Company information (RUC, business name, address)
+- Branch information
+- Document type and number
+- Issue date and due date (invoices)
+
+### Client Section
+- Client document type and number
+- Legal/business name
+- Address and contact information
+
+### Items Table
+- Item code and description
+- Quantity and unit of measure
+- Unit value
+- IGV/taxes
+- Line total
+
+### Totals Section
+- Subtotal (taxable operations)
+- IGV amount
+- Other taxes (ICBPER, ISC, IVAP)
+- Total amount
+- Amount in words
+
+### Footer Section
+- QR code (SUNAT standard)
+- Digital signature hash
+- SUNAT response (if accepted)
+- Payment terms (if credit)
+
+## QR Code Generation
+
+All PDFs include a SUNAT-compliant QR code with the following format:
+
+```
+RUC|TIPO_DOC|SERIE|NUMERO|MTO_IGV|MTO_TOTAL|FECHA_EMISION|TIPO_DOC_CLIENTE|NUM_DOC_CLIENTE|
+```
+
+**Example:**
+
+```
+20123456789|01|F001|00000123|900.00|5900.00|2024-03-15|6|20987654321|
+```
+
+This QR code allows clients to verify document authenticity through the SUNAT app.
+
+## Format-Specific Templates
+
+### A4 Format (Office)
+
+- Full company branding
+- Detailed item table with all columns
+- Complete tax breakdown
+- Professional layout for business use
+- Email-friendly
+
+**Use for:**
+- Email attachments to clients
+- Printing for files/records
+- B2B transactions
+- Formal documentation
+
+### A5 Format (Compact)
+
+- Reduced size for storage
+- Simplified layout
+- Essential information only
+- Good for archiving
+
+**Use for:**
+- Physical filing
+- Reduced paper usage
+- Internal records
+
+### 80mm Thermal Format
+
+- Optimized for 80mm thermal printers
+- Vertical layout
+- Condensed information
+- No margins for thermal printing
+
+**Use for:**
+- POS/Retail receipts
+- Standard thermal printers
+- Customer copies
+- Quick printing
+
+### Ticket Format (50mm)
+
+- Extra compact for small printers
+- Minimal information
+- Essential details only
+- Very condensed layout
+
+**Use for:**
+- Small thermal printers
+- Mobile POS
+- Compact receipts
+- Space-constrained environments
+
+## Template Implementation
+
+From `app/Services/PdfService.php`, the PDF generation process:
+
+### Invoice PDF (Line 44-54)
+
+1. Prepares invoice data including company, client, details
+2. Generates QR code with SUNAT format
+3. Calculates totals and converts to words
+4. Renders template with format-specific layout
+5. Creates PDF using DomPDF library
+6. Returns PDF binary or saves to storage
+
+### Key Features
+
+- **Automatic calculations**: All totals computed from details
+- **QR generation**: SUNAT-compliant QR codes
+- **Number to words**: Amount converted to Spanish text
+- **Format adaptation**: Templates adjust to paper size
+- **Logo support**: Company logos included when configured
+
+## Customization Options
+
+### Company Logo
+
+Set company logo via the company configuration:
+
+```json
+{
+  "logo_path": "storage/logos/company-logo.png"
+}
+```
+
+The logo appears in the PDF header for all formats except ticket.
+
+### Custom Colors
+
+Templates use company brand colors if configured in the company settings.
+
+### Additional Fields
+
+Include extra information in PDFs via `datos_adicionales`:
+
+```json
+{
+  "datos_adicionales": {
+    "orden_compra": "OC-2024-001",
+    "vendedor": "Carlos Martinez",
+    "condiciones": "Pago contra entrega"
+  }
+}
+```
+
+## Implementation Example
+
+From `app/Http/Controllers/Traits/HandlesPdfGeneration.php:15-65`:
+
+```php
+protected function generateDocumentPdf($document, string $documentType, Request $request)
+{
+    $format = $request->get('format', 'A4');
+    
+    // Validate format
+    $pdfService = app(PdfService::class);
+    if (!$pdfService->isValidFormat($format)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Formato no válido'
+        ], 400);
+    }
+    
+    // Generate PDF based on document type
+    $pdfContent = match($documentType) {
+        'invoice' => $pdfService->generateInvoicePdf($document, $format),
+        'boleta' => $pdfService->generateBoletaPdf($document, $format),
+        'credit-note' => $pdfService->generateCreditNotePdf($document, $format),
+        'debit-note' => $pdfService->generateDebitNotePdf($document, $format),
+    };
+    
+    // Save PDF
+    $fileService = app(FileService::class);
+    $pdfPath = $fileService->savePdf($document, $pdfContent, $format);
+    
+    return response()->json([
+        'success' => true,
+        'message' => "PDF generado correctamente en formato {$format}",
+        'data' => [
+            'pdf_path' => $pdfPath,
+            'format' => $format
+        ]
+    ]);
+}
+```
+
+## Best Practices
+
+1. **Choose the right format**:
+   - A4 for business documents and emails
+   - 80mm for retail/POS systems
+   - Ticket for mobile/compact printers
+
+2. **Generate after SUNAT acceptance**:
+   - QR codes include hash from accepted documents
+   - More accurate SUNAT response information
+
+3. **Store PDFs separately**:
+   - Different formats for different uses
+   - Original A4 for records
+   - Thermal for customer copies
+
+4. **Include company logo**:
+   - Professional appearance
+   - Brand consistency
+   - Better client recognition
+
+5. **Regenerate when needed**:
+   - After document modifications
+   - When format requirements change
+   - For updated templates
+
+## Error Handling
+
+### Invalid Format
+
+```json
+{
+  "success": false,
+  "message": "Formato no válido. Formatos disponibles: A4, A5, 80mm, 50mm, ticket"
+}
+```
+
+### Document Not Found
+
+```json
+{
+  "success": false,
+  "message": "Factura no encontrada"
+}
+```
+
+### PDF Generation Failed
+
+```json
+{
+  "success": false,
+  "message": "Error al generar PDF: [error details]"
+}
+```
+
+## Technical Details
+
+### DomPDF Configuration
+
+From `app/Services/PdfService.php:521-535`:
+
+- **Font**: Arial (default)
+- **Remote resources**: Enabled (for logos, external CSS)
+- **HTML5 parser**: Enabled
+- **Paper orientation**: Portrait
+- **Custom sizes**: Converted from mm to points
+
+### Template System
+
+Templates are located in Laravel Blade views:
+- `resources/views/pdf/invoice-{format}.blade.php`
+- `resources/views/pdf/boleta-{format}.blade.php`
+- `resources/views/pdf/credit-note-{format}.blade.php`
+- `resources/views/pdf/debit-note-{format}.blade.php`
+
+### Number to Words
+
+The system converts amounts to Spanish words (line 436-516):
+
+```
+5900.00 → "cinco mil novecientos con 00/100 SOLES"
+```
+
+This appears in all PDFs for legal compliance.
+
+## Batch PDF Generation
+
+Generate PDFs for multiple documents:
+
+```bash
+# Generate PDFs for all pending invoices
+for id in 100 101 102 103; do
+  curl -X POST "https://api.example.com/api/invoices/${id}/generate-pdf?format=A4" \
+    -H "Authorization: Bearer YOUR_TOKEN"
+done
+```
+
+## Performance Considerations
+
+- PDF generation takes 1-3 seconds per document
+- Large item lists increase generation time
+- Images (logos) add processing time
+- Consider background jobs for bulk generation
+- Cache generated PDFs when possible
+
+## Common Use Cases
+
+### Retail POS System
+
+```bash
+# Generate thermal receipt for customer
+curl -X POST "https://api.example.com/api/boletas/456/generate-pdf?format=80mm" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Email Invoice to Client
+
+```bash
+# Generate A4 PDF for email attachment
+curl -X GET "https://api.example.com/api/invoices/123/download-pdf?format=A4" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o invoice-F001-123.pdf
+```
+
+### Archive Documents
+
+```bash
+# Generate compact A5 for filing
+curl -X POST "https://api.example.com/api/invoices/123/generate-pdf?format=A5" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Next Steps
+
+<Card title="Multi-Company Setup" icon="building" href="/guides/multi-company">
+  Configure multiple companies and branches
+</Card>
+
+<Card title="Creating Invoices" icon="file-invoice" href="/guides/creating-invoices">
+  Learn about invoice creation and sending
+</Card>

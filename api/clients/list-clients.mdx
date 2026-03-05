@@ -1,0 +1,258 @@
+---
+title: 'List Clients'
+api: 'GET /api/v1/clients'
+---
+
+Retrieves a paginated list of clients with optional filtering by company, document type, and text search.
+
+## Authentication
+
+This endpoint requires authentication using a Bearer token.
+
+```bash
+Authorization: Bearer {your_token}
+```
+
+## Query Parameters
+
+<ParamField query="company_id" type="integer" optional>
+  Filter clients by company ID
+</ParamField>
+
+<ParamField query="tipo_documento" type="string" optional>
+  Filter by document type. Valid values:
+  - `1` - DNI (National ID)
+  - `4` - Carnet de Extranjería (Foreign ID)
+  - `6` - RUC (Tax ID)
+  - `7` - Passport
+  - `0` - DOC.TRIB.NO.DOM.SIN.RUC (Foreign Tax Document)
+</ParamField>
+
+<ParamField query="search" type="string" optional>
+  Search text to filter by document number, legal name (razon_social), or commercial name (nombre_comercial)
+</ParamField>
+
+<ParamField query="page" type="integer" optional default="1">
+  Page number for pagination
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of client objects
+  
+  <ResponseField name="id" type="integer">
+    Client ID
+  </ResponseField>
+  
+  <ResponseField name="company_id" type="integer">
+    Associated company ID
+  </ResponseField>
+  
+  <ResponseField name="tipo_documento" type="string">
+    Document type code (1, 4, 6, 7, 0)
+  </ResponseField>
+  
+  <ResponseField name="numero_documento" type="string">
+    Document number (RUC, DNI, etc.)
+  </ResponseField>
+  
+  <ResponseField name="razon_social" type="string">
+    Legal name of the client
+  </ResponseField>
+  
+  <ResponseField name="nombre_comercial" type="string" optional>
+    Commercial name
+  </ResponseField>
+  
+  <ResponseField name="direccion" type="string" optional>
+    Physical address
+  </ResponseField>
+  
+  <ResponseField name="ubigeo" type="string" optional>
+    6-digit UBIGEO code
+  </ResponseField>
+  
+  <ResponseField name="distrito" type="string" optional>
+    District name
+  </ResponseField>
+  
+  <ResponseField name="provincia" type="string" optional>
+    Province name
+  </ResponseField>
+  
+  <ResponseField name="departamento" type="string" optional>
+    Department name
+  </ResponseField>
+  
+  <ResponseField name="telefono" type="string" optional>
+    Phone number
+  </ResponseField>
+  
+  <ResponseField name="email" type="string" optional>
+    Email address
+  </ResponseField>
+  
+  <ResponseField name="activo" type="boolean">
+    Whether the client is active
+  </ResponseField>
+  
+  <ResponseField name="created_at" type="string">
+    Timestamp when the client was created
+  </ResponseField>
+  
+  <ResponseField name="updated_at" type="string">
+    Timestamp when the client was last updated
+  </ResponseField>
+  
+  <ResponseField name="company" type="object">
+    Associated company information
+    
+    <ResponseField name="id" type="integer">
+      Company ID
+    </ResponseField>
+    
+    <ResponseField name="ruc" type="string">
+      Company RUC
+    </ResponseField>
+    
+    <ResponseField name="razon_social" type="string">
+      Company legal name
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="meta" type="object">
+  Pagination metadata
+  
+  <ResponseField name="total" type="integer">
+    Total number of clients
+  </ResponseField>
+  
+  <ResponseField name="per_page" type="integer">
+    Number of items per page (default: 20)
+  </ResponseField>
+  
+  <ResponseField name="current_page" type="integer">
+    Current page number
+  </ResponseField>
+  
+  <ResponseField name="last_page" type="integer">
+    Last page number
+  </ResponseField>
+</ResponseField>
+
+## Example Request
+
+```bash cURL
+curl -X GET "https://api.example.com/api/v1/clients?company_id=1&tipo_documento=6&search=20123456789" \
+  -H "Authorization: Bearer your_token_here" \
+  -H "Accept: application/json"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.example.com/api/v1/clients?company_id=1&tipo_documento=6', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer your_token_here',
+    'Accept': 'application/json'
+  }
+});
+
+const data = await response.json();
+```
+
+```php PHP
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, 'https://api.example.com/api/v1/clients?company_id=1');
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Authorization: Bearer your_token_here',
+    'Accept: application/json'
+]);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+$response = curl_exec($ch);
+$data = json_decode($response, true);
+curl_close($ch);
+```
+
+## Example Response
+
+```json 200 Success
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "company_id": 1,
+      "tipo_documento": "6",
+      "numero_documento": "20123456789",
+      "razon_social": "EMPRESA DEMO S.A.C.",
+      "nombre_comercial": "Empresa Demo",
+      "direccion": "Av. Los Comerciantes 123",
+      "ubigeo": "150101",
+      "distrito": "Lima",
+      "provincia": "Lima",
+      "departamento": "Lima",
+      "telefono": "01-2345678",
+      "email": "contacto@empresademo.com",
+      "activo": true,
+      "created_at": "2024-01-15T10:30:00.000000Z",
+      "updated_at": "2024-01-15T10:30:00.000000Z",
+      "company": {
+        "id": 1,
+        "ruc": "20987654321",
+        "razon_social": "MI EMPRESA S.A.C."
+      }
+    },
+    {
+      "id": 2,
+      "company_id": 1,
+      "tipo_documento": "1",
+      "numero_documento": "12345678",
+      "razon_social": "Juan Pérez García",
+      "nombre_comercial": null,
+      "direccion": "Jr. Las Flores 456",
+      "ubigeo": "150102",
+      "distrito": "Ancón",
+      "provincia": "Lima",
+      "departamento": "Lima",
+      "telefono": "987654321",
+      "email": "juan.perez@example.com",
+      "activo": true,
+      "created_at": "2024-01-16T14:20:00.000000Z",
+      "updated_at": "2024-01-16T14:20:00.000000Z",
+      "company": {
+        "id": 1,
+        "ruc": "20987654321",
+        "razon_social": "MI EMPRESA S.A.C."
+      }
+    }
+  ],
+  "meta": {
+    "total": 2,
+    "per_page": 20,
+    "current_page": 1,
+    "last_page": 1
+  }
+}
+```
+
+```json 500 Error
+{
+  "success": false,
+  "message": "Error al obtener clientes: Database connection failed"
+}
+```
+
+<Note>
+  The endpoint returns 20 clients per page by default. Use the `page` query parameter to navigate through multiple pages.
+</Note>
+
+<Info>
+  Clients are returned with their associated company information using eager loading for optimal performance. The search parameter performs a case-insensitive partial match on document number, legal name, and commercial name.
+</Info>

@@ -1,0 +1,271 @@
+---
+title: 'Search Client by Document'
+api: 'POST /api/v1/clients/search-by-document'
+---
+
+Searches for an active client by their document type and number within a specific company. This endpoint is useful for quickly finding client information when issuing invoices or other documents.
+
+## Authentication
+
+This endpoint requires authentication using a Bearer token.
+
+```bash
+Authorization: Bearer {your_token}
+```
+
+## Request Body
+
+<ParamField body="company_id" type="integer" required>
+  ID of the company to search within
+</ParamField>
+
+<ParamField body="tipo_documento" type="string" required>
+  Document type code. Valid values:
+  - `1` - DNI (National ID)
+  - `4` - Carnet de Extranjería (Foreign ID)
+  - `6` - RUC (Tax ID)
+  - `7` - Passport
+  - `0` - DOC.TRIB.NO.DOM.SIN.RUC (Foreign Tax Document)
+</ParamField>
+
+<ParamField body="numero_documento" type="string" required>
+  Document number to search for (max 20 characters)
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="message" type="string" optional>
+  Error message (only present when success is false)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The found client object (only present when success is true)
+  
+  <ResponseField name="id" type="integer">
+    Client ID
+  </ResponseField>
+  
+  <ResponseField name="company_id" type="integer">
+    Associated company ID
+  </ResponseField>
+  
+  <ResponseField name="tipo_documento" type="string">
+    Document type code
+  </ResponseField>
+  
+  <ResponseField name="numero_documento" type="string">
+    Document number
+  </ResponseField>
+  
+  <ResponseField name="razon_social" type="string">
+    Legal name of the client
+  </ResponseField>
+  
+  <ResponseField name="nombre_comercial" type="string" optional>
+    Commercial name
+  </ResponseField>
+  
+  <ResponseField name="direccion" type="string" optional>
+    Physical address
+  </ResponseField>
+  
+  <ResponseField name="ubigeo" type="string" optional>
+    6-digit UBIGEO code
+  </ResponseField>
+  
+  <ResponseField name="distrito" type="string" optional>
+    District name
+  </ResponseField>
+  
+  <ResponseField name="provincia" type="string" optional>
+    Province name
+  </ResponseField>
+  
+  <ResponseField name="departamento" type="string" optional>
+    Department name
+  </ResponseField>
+  
+  <ResponseField name="telefono" type="string" optional>
+    Phone number
+  </ResponseField>
+  
+  <ResponseField name="email" type="string" optional>
+    Email address
+  </ResponseField>
+  
+  <ResponseField name="activo" type="boolean">
+    Whether the client is active (always true for search results)
+  </ResponseField>
+  
+  <ResponseField name="created_at" type="string">
+    Timestamp when the client was created
+  </ResponseField>
+  
+  <ResponseField name="updated_at" type="string">
+    Timestamp when the client was last updated
+  </ResponseField>
+  
+  <ResponseField name="company" type="object">
+    Associated company information
+    
+    <ResponseField name="id" type="integer">
+      Company ID
+    </ResponseField>
+    
+    <ResponseField name="ruc" type="string">
+      Company RUC
+    </ResponseField>
+    
+    <ResponseField name="razon_social" type="string">
+      Company legal name
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="errors" type="object" optional>
+  Validation errors (only present when validation fails)
+</ResponseField>
+
+## Example Request
+
+```bash cURL
+curl -X POST "https://api.example.com/api/v1/clients/search-by-document" \
+  -H "Authorization: Bearer your_token_here" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "company_id": 1,
+    "tipo_documento": "6",
+    "numero_documento": "20123456789"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.example.com/api/v1/clients/search-by-document', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer your_token_here',
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  },
+  body: JSON.stringify({
+    company_id: 1,
+    tipo_documento: '6',
+    numero_documento: '20123456789'
+  })
+});
+
+const data = await response.json();
+```
+
+```php PHP
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, 'https://api.example.com/api/v1/clients/search-by-document');
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Authorization: Bearer your_token_here',
+    'Content-Type: application/json',
+    'Accept: application/json'
+]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+    'company_id' => 1,
+    'tipo_documento' => '6',
+    'numero_documento' => '20123456789'
+]));
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+$response = curl_exec($ch);
+$data = json_decode($response, true);
+curl_close($ch);
+```
+
+## Example Response
+
+```json 200 Success
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "company_id": 1,
+    "tipo_documento": "6",
+    "numero_documento": "20123456789",
+    "razon_social": "EMPRESA DEMO S.A.C.",
+    "nombre_comercial": "Empresa Demo",
+    "direccion": "Av. Los Comerciantes 123",
+    "ubigeo": "150101",
+    "distrito": "Lima",
+    "provincia": "Lima",
+    "departamento": "Lima",
+    "telefono": "01-2345678",
+    "email": "contacto@empresademo.com",
+    "activo": true,
+    "created_at": "2024-01-15T10:30:00.000000Z",
+    "updated_at": "2024-01-15T10:30:00.000000Z",
+    "company": {
+      "id": 1,
+      "ruc": "20987654321",
+      "razon_social": "MI EMPRESA S.A.C."
+    }
+  }
+}
+```
+
+```json 404 Not Found
+{
+  "success": false,
+  "message": "Cliente no encontrado"
+}
+```
+
+```json 422 Validation Error
+{
+  "success": false,
+  "message": "Errores de validación",
+  "errors": {
+    "company_id": [
+      "The company_id field is required."
+    ],
+    "tipo_documento": [
+      "The tipo_documento field is required.",
+      "The selected tipo_documento is invalid."
+    ],
+    "numero_documento": [
+      "The numero_documento field is required."
+    ]
+  }
+}
+```
+
+```json 500 Error
+{
+  "success": false,
+  "message": "Error al buscar cliente: Database connection failed"
+}
+```
+
+<Note>
+  This endpoint only returns **active** clients. If a client exists but is marked as inactive (`activo: false`), it will not be returned and you'll receive a 404 error.
+</Note>
+
+<Info>
+  The search is performed using exact matching on all three parameters: `company_id`, `tipo_documento`, and `numero_documento`. All three fields must match exactly for a client to be found.
+</Info>
+
+## Use Cases
+
+This endpoint is particularly useful when:
+
+- **Creating invoices**: Quickly look up client information by their RUC or DNI before generating an invoice
+- **Validating documents**: Check if a client exists in your system before creating a new one
+- **Auto-completing forms**: Populate form fields with client data when the user enters a document number
+- **Point of sale systems**: Retrieve client details during the checkout process
+
+## Validation Rules
+
+- **company_id**: Required, must reference an existing company
+- **tipo_documento**: Required, must be one of: `1`, `4`, `6`, `7`, or `0`
+- **numero_documento**: Required, max 20 characters

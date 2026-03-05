@@ -1,0 +1,634 @@
+---
+title: Installation
+description: Complete guide to install and configure the SUNAT Electronic Invoicing API
+---
+
+# Installation Guide
+
+This guide covers the complete installation and configuration of the SUNAT Electronic Invoicing API on your server.
+
+## System Requirements
+
+### Minimum Requirements
+
+<CardGroup cols={2}>
+  <Card title="PHP" icon="php">
+    Version **8.2** or higher with required extensions
+  </Card>
+  
+  <Card title="Database" icon="database">
+    MySQL **8.0+** or PostgreSQL **12+**
+  </Card>
+  
+  <Card title="Composer" icon="box">
+    Latest stable version for dependency management
+  </Card>
+  
+  <Card title="Web Server" icon="server">
+    Apache 2.4+ or Nginx 1.18+ (optional for production)
+  </Card>
+</CardGroup>
+
+### Required PHP Extensions
+
+Verify these extensions are installed and enabled:
+
+```bash
+php -m | grep -E 'openssl|pdo|mbstring|tokenizer|xml|ctype|json|bcmath|curl|fileinfo|zip'
+```
+
+Required extensions:
+- `openssl` - For certificate handling
+- `pdo_mysql` or `pdo_pgsql` - Database connectivity
+- `mbstring` - Multibyte string handling
+- `tokenizer` - Laravel requirement
+- `xml` - XML processing
+- `ctype` - Character type checking
+- `json` - JSON handling
+- `bcmath` - Arbitrary precision mathematics
+- `curl` - HTTP requests to SUNAT
+- `fileinfo` - File type detection
+- `zip` - Handling CDR zip files
+
+<Warning>
+If any extensions are missing, install them before proceeding:
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install php8.2-{cli,fpm,mysql,xml,mbstring,curl,zip,bcmath}
+
+# CentOS/RHEL
+sudo yum install php82-{cli,fpm,mysqlnd,xml,mbstring,curl,zip,bcmath}
+```
+</Warning>
+
+## Step 1: Clone the Repository
+
+Clone the project from GitHub:
+
+```bash
+git clone https://github.com/yorchavez9/Api-de-facturacion-electronica-sunat-Peru.git
+cd Api-de-facturacion-electronica-sunat-Peru
+```
+
+<Note>
+Alternatively, download the ZIP file and extract it to your preferred location.
+</Note>
+
+## Step 2: Install Dependencies
+
+Install all required PHP packages using Composer:
+
+```bash
+composer install
+```
+
+This will install:
+
+| Package | Version | Purpose |
+|---------|---------|--------|
+| laravel/framework | ^12.0 | Core framework |
+| greenter/lite | ^5.1 | SUNAT integration |
+| greenter/consulta-cpe | * | CPE query service |
+| dompdf/dompdf | ^3.1 | PDF generation |
+| endroid/qr-code | * | QR code creation |
+| laravel/sanctum | ^4.0 | API authentication |
+
+<Info>
+**Installation time:** Composer installation typically takes 2-5 minutes depending on your internet connection.
+</Info>
+
+## Step 3: Environment Configuration
+
+Create your environment configuration file:
+
+```bash
+cp .env.example .env
+```
+
+### Generate Application Key
+
+```bash
+php artisan key:generate
+```
+
+This generates a secure encryption key for Laravel.
+
+### Configure Environment Variables
+
+Edit the `.env` file with your settings:
+
+<CodeGroup>
+```bash Application Settings
+# Application Configuration
+APP_NAME="API Facturación SUNAT - BETA"
+APP_ENV=local
+APP_KEY=base64:YOUR_GENERATED_KEY
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+
+# Locale Configuration
+APP_LOCALE=es
+APP_FALLBACK_LOCALE=es
+APP_FAKER_LOCALE=es_PE
+```
+
+```bash Database Settings
+# Database Configuration
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=db_api_sunat
+DB_USERNAME=root
+DB_PASSWORD=your_secure_password
+```
+
+```bash SUNAT Configuration
+# SUNAT Environment
+SUNAT_ENVIRONMENT=beta
+SUNAT_CERTIFICATE_PATH=
+SUNAT_CERTIFICATE_PASSWORD=
+SUNAT_PRIVATE_KEY_PATH=
+```
+
+```bash Sanctum Settings
+# Laravel Sanctum Configuration
+SANCTUM_STATEFUL_DOMAINS=localhost,localhost:8000,127.0.0.1
+SANCTUM_EXPIRATION=1440
+SANCTUM_TOKEN_PREFIX=sunat_beta_
+SANCTUM_VERIFY_IP=false
+SANCTUM_LOG_USAGE=true
+SANCTUM_MAX_INACTIVITY=120
+SANCTUM_MAX_TOKENS=10
+SANCTUM_ROTATE_TOKENS=false
+SANCTUM_PURGE_DAYS=7
+```
+
+```bash File Storage
+# Files Configuration
+FILES_STORAGE_PATH=storage/app/sunat
+FILES_MAX_SIZE=10240
+```
+</CodeGroup>
+
+## Step 4: Database Setup
+
+### Create Database
+
+<Tabs>
+  <Tab title="MySQL">
+    ```sql
+    CREATE DATABASE db_api_sunat CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    
+    -- Create dedicated user (recommended)
+    CREATE USER 'sunat_user'@'localhost' IDENTIFIED BY 'secure_password';
+    GRANT ALL PRIVILEGES ON db_api_sunat.* TO 'sunat_user'@'localhost';
+    FLUSH PRIVILEGES;
+    ```
+  </Tab>
+  
+  <Tab title="PostgreSQL">
+    ```sql
+    CREATE DATABASE db_api_sunat WITH ENCODING 'UTF8';
+    
+    -- Create dedicated user (recommended)
+    CREATE USER sunat_user WITH PASSWORD 'secure_password';
+    GRANT ALL PRIVILEGES ON DATABASE db_api_sunat TO sunat_user;
+    ```
+  </Tab>
+</Tabs>
+
+### Run Migrations
+
+Execute database migrations to create all required tables:
+
+```bash
+php artisan migrate
+```
+
+This creates the following tables:
+
+<AccordionGroup>
+  <Accordion title="Core Tables">
+    - `users` - System users and authentication
+    - `roles` - User roles (super_admin, admin, user)
+    - `permissions` - Granular permissions
+    - `role_permission` - Role-permission mapping
+    - `personal_access_tokens` - API tokens (Sanctum)
+  </Accordion>
+  
+  <Accordion title="Company Tables">
+    - `companies` - Issuing companies
+    - `company_configurations` - Per-company settings
+    - `branches` - Branch offices
+    - `clients` - Customers and suppliers
+    - `correlatives` - Document series and numbering
+  </Accordion>
+  
+  <Accordion title="Document Tables">
+    - `invoices` - Electronic invoices (Facturas)
+    - `boletas` - Sales receipts
+    - `credit_notes` - Credit notes (future)
+    - `debit_notes` - Debit notes (future)
+  </Accordion>
+  
+  <Accordion title="Ubigeo Tables">
+    - `ubi_regiones` - Peru regions
+    - `ubi_provincias` - Provinces
+    - `ubi_distritos` - Districts
+  </Accordion>
+  
+  <Accordion title="System Tables">
+    - `jobs` - Queue jobs
+    - `cache` - Application cache
+    - `sessions` - User sessions
+  </Accordion>
+</AccordionGroup>
+
+<Check>**Expected output:** All migrations should run successfully with no errors</Check>
+
+## Step 5: Certificate Setup
+
+### Understanding SUNAT Certificates
+
+SUNAT requires a digital certificate to sign electronic documents. You'll receive a `.pfx` file from your certificate provider.
+
+### Convert Certificate to PEM Format
+
+The API uses `.pem` format certificates. Convert your `.pfx` file:
+
+```bash
+# Convert .pfx to .pem (includes both private key and certificate)
+openssl pkcs12 -in certificado.pfx -out certificado.pem -nodes
+```
+
+<Warning>
+You'll be prompted for the certificate password. This is the password provided by your certificate authority, not your SOL password.
+</Warning>
+
+**What this command does:**
+- `-in certificado.pfx` - Input file
+- `-out certificado.pem` - Output file  
+- `-nodes` - Don't encrypt the private key
+
+### Place Certificate in Correct Location
+
+```bash
+# Create certificate directory
+mkdir -p storage/app/public/certificado
+
+# Copy certificate (maintain strict permissions)
+cp certificado.pem storage/app/public/certificado/certificado.pem
+chmod 644 storage/app/public/certificado/certificado.pem
+```
+
+<Info>
+**For testing:** SUNAT provides test certificates for the beta environment. Contact SUNAT or use the credentials from their documentation.
+</Info>
+
+### Verify Certificate
+
+Validate your certificate is correctly formatted:
+
+```bash
+# View certificate details
+openssl x509 -in storage/app/public/certificado/certificado.pem -text -noout
+
+# Check private key
+openssl rsa -in storage/app/public/certificado/certificado.pem -check
+```
+
+Expected components in the `.pem` file:
+
+```pem
+-----BEGIN PRIVATE KEY-----
+[Base64 encoded private key]
+-----END PRIVATE KEY-----
+-----BEGIN CERTIFICATE-----
+[Base64 encoded certificate]
+-----END CERTIFICATE-----
+```
+
+## Step 6: Storage Permissions
+
+Set correct permissions for Laravel storage and cache:
+
+```bash
+# Set storage permissions
+chmod -R 775 storage bootstrap/cache
+
+# Set ownership (if running as www-data)
+sudo chown -R www-data:www-data storage bootstrap/cache
+
+# Create SUNAT files directory
+mkdir -p storage/app/sunat
+chmod -R 775 storage/app/sunat
+
+# Create Greenter cache directory
+mkdir -p storage/app/greenter/cache
+chmod -R 775 storage/app/greenter/cache
+```
+
+<Warning>
+**Security Note:** Never set permissions to `777`. Use `775` for directories and `664` for files, with appropriate ownership.
+</Warning>
+
+## Step 7: Test the Installation
+
+### Start Development Server
+
+```bash
+php artisan serve
+```
+
+The server will start at `http://localhost:8000`
+
+### Verify API is Running
+
+Test the system info endpoint:
+
+```bash
+curl http://localhost:8000/api/system/info
+```
+
+Expected response:
+
+```json
+{
+  "system_initialized": false,
+  "user_count": 0,
+  "roles_count": 0,
+  "app_name": "API Facturación SUNAT - BETA",
+  "app_env": "local",
+  "app_debug": true,
+  "database_connected": true
+}
+```
+
+<Check>If `database_connected: true`, your installation is successful!</Check>
+
+## Step 8: Optional - Seed Sample Data
+
+Load sample ubigeo (geographic) data:
+
+```bash
+php artisan db:seed --class=UbigeoSeeder
+```
+
+This populates Peru's regions, provinces, and districts for address validation.
+
+## Production Deployment
+
+### Optimization Commands
+
+Before deploying to production:
+
+```bash
+# Optimize configuration loading
+php artisan config:cache
+
+# Optimize route loading
+php artisan route:cache
+
+# Optimize view compilation
+php artisan view:cache
+
+# Optimize autoloader
+composer install --optimize-autoloader --no-dev
+```
+
+### Production Environment
+
+Update `.env` for production:
+
+```bash
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://yourdomain.com
+
+# Use production SUNAT endpoints
+SUNAT_ENVIRONMENT=production
+```
+
+### Web Server Configuration
+
+<Tabs>
+  <Tab title="Nginx">
+    ```nginx
+    server {
+        listen 80;
+        server_name yourdomain.com;
+        root /var/www/api-sunat/public;
+    
+        add_header X-Frame-Options "SAMEORIGIN";
+        add_header X-Content-Type-Options "nosniff";
+    
+        index index.php;
+    
+        charset utf-8;
+    
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+    
+        location = /favicon.ico { access_log off; log_not_found off; }
+        location = /robots.txt  { access_log off; log_not_found off; }
+    
+        error_page 404 /index.php;
+    
+        location ~ \.php$ {
+            fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+            include fastcgi_params;
+        }
+    
+        location ~ /\.(?!well-known).* {
+            deny all;
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Apache">
+    ```apache
+    <VirtualHost *:80>
+        ServerName yourdomain.com
+        DocumentRoot /var/www/api-sunat/public
+    
+        <Directory /var/www/api-sunat/public>
+            AllowOverride All
+            Require all granted
+        </Directory>
+    
+        ErrorLog ${APACHE_LOG_DIR}/sunat-error.log
+        CustomLog ${APACHE_LOG_DIR}/sunat-access.log combined
+    </VirtualHost>
+    ```
+    
+    Enable required modules:
+    ```bash
+    sudo a2enmod rewrite
+    sudo systemctl restart apache2
+    ```
+  </Tab>
+</Tabs>
+
+### SSL/HTTPS Setup
+
+For production, always use HTTPS:
+
+```bash
+# Using Certbot (Let's Encrypt)
+sudo apt-get install certbot python3-certbot-nginx
+sudo certbot --nginx -d yourdomain.com
+```
+
+## Queue Configuration (Optional)
+
+For better performance, configure queues:
+
+```bash
+# Update .env
+QUEUE_CONNECTION=database
+
+# Run migrations for jobs table (already included)
+php artisan migrate
+
+# Start queue worker
+php artisan queue:work --tries=3 --timeout=90
+```
+
+For production, use Supervisor:
+
+```ini
+[program:sunat-queue]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/api-sunat/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=www-data
+numprocs=2
+redirect_stderr=true
+stdout_logfile=/var/www/api-sunat/storage/logs/worker.log
+stopwaitsecs=3600
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="500 Internal Server Error">
+    **Symptoms:** White page or 500 error
+    
+    **Solutions:**
+    1. Check storage permissions: `chmod -R 775 storage`
+    2. Clear cached config: `php artisan config:clear`
+    3. Check Laravel logs: `tail -f storage/logs/laravel.log`
+    4. Verify .env file exists and APP_KEY is set
+  </Accordion>
+
+  <Accordion title="Database Connection Failed">
+    **Symptoms:** `SQLSTATE[HY000] [2002] Connection refused`
+    
+    **Solutions:**
+    1. Verify database is running: `systemctl status mysql`
+    2. Check credentials in `.env`
+    3. Test connection: `php artisan migrate:status`
+    4. Verify database exists: `SHOW DATABASES;`
+  </Accordion>
+
+  <Accordion title="Certificate Not Found">
+    **Symptoms:** `Archivo de certificado no encontrado`
+    
+    **Solutions:**
+    1. Verify path: `ls -l storage/app/public/certificado/`
+    2. Check file exists: `certificado.pem`
+    3. Verify permissions: `chmod 644 certificado.pem`
+    4. Check certificate format with openssl
+  </Accordion>
+
+  <Accordion title="Composer Memory Exhausted">
+    **Symptoms:** `Fatal error: Allowed memory size exhausted`
+    
+    **Solutions:**
+    1. Increase PHP memory: `php -d memory_limit=-1 /usr/bin/composer install`
+    2. Or update php.ini: `memory_limit = 512M`
+  </Accordion>
+
+  <Accordion title="Permission Denied Errors">
+    **Symptoms:** Cannot write to storage/logs
+    
+    **Solutions:**
+    ```bash
+    # Fix ownership
+    sudo chown -R $USER:www-data storage bootstrap/cache
+    
+    # Fix permissions
+    chmod -R 775 storage bootstrap/cache
+    
+    # Set default ACL (if available)
+    setfacl -R -m u:www-data:rwX storage bootstrap/cache
+    setfacl -dR -m u:www-data:rwX storage bootstrap/cache
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Verification Checklist
+
+Before proceeding to create invoices:
+
+<Steps>
+  <Step title="Database Connected">
+    ✓ `system/info` endpoint returns `database_connected: true`
+  </Step>
+  
+  <Step title="Migrations Complete">
+    ✓ All tables created: `php artisan migrate:status`
+  </Step>
+  
+  <Step title="Certificate Installed">
+    ✓ Certificate exists at `storage/app/public/certificado/certificado.pem`
+  </Step>
+  
+  <Step title="Storage Writable">
+    ✓ Storage directories have correct permissions
+  </Step>
+  
+  <Step title="Environment Configured">
+    ✓ `.env` file has all required settings
+  </Step>
+</Steps>
+
+## Next Steps
+
+Now that installation is complete:
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Create your first invoice in 10 minutes
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Explore all available endpoints
+  </Card>
+  
+  <Card title="Authentication" icon="lock" href="/authentication">
+    Learn about API authentication
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Advanced configuration options
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+<Info>
+If you encounter issues during installation:
+
+- Check the [GitHub Issues](https://github.com/yorchavez9/Api-de-facturacion-electronica-sunat-Peru/issues)
+- Review Laravel logs in `storage/logs/laravel.log`  
+- Watch the [YouTube tutorial series](https://www.youtube.com/watch?v=HrrEdjY_7MU&list=PLfwfiNJ5Qw-ZlCfGnWjnILOI4OJfJkGp5)
+- Contact via [WhatsApp](https://wa.link/z50dwk)
+</Info>
