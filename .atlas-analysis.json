@@ -1,0 +1,148 @@
+{
+  "projectType": "api-service",
+  "projectName": "SUNAT Electronic Invoicing API",
+  "projectDescription": "Laravel-based API for Peruvian electronic invoicing (SUNAT) with Greenter integration, supporting invoice generation, XML signing, and CDR retrieval.",
+  "theme": "linden",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/authentication",
+              "concepts/certificate-setup",
+              "concepts/environments"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/creating-invoices",
+              "guides/creating-boletas",
+              "guides/credit-notes",
+              "guides/debit-notes",
+              "guides/pdf-generation",
+              "guides/multi-company"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/sunat-integration",
+              "advanced/xml-signing",
+              "advanced/cdr-handling",
+              "advanced/daily-summaries",
+              "advanced/voided-documents"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth/login",
+              "api/auth/logout",
+              "api/auth/initialize"
+            ]
+          },
+          {
+            "group": "Companies & Branches",
+            "pages": [
+              "api/companies/list-companies",
+              "api/companies/create-company",
+              "api/companies/update-company",
+              "api/companies/company-config",
+              "api/branches/list-branches",
+              "api/branches/create-branch"
+            ]
+          },
+          {
+            "group": "Clients",
+            "pages": [
+              "api/clients/list-clients",
+              "api/clients/create-client",
+              "api/clients/search-client"
+            ]
+          },
+          {
+            "group": "Electronic Documents",
+            "pages": [
+              "api/documents/create-invoice",
+              "api/documents/create-boleta",
+              "api/documents/send-to-sunat",
+              "api/documents/download-xml",
+              "api/documents/download-cdr",
+              "api/documents/download-pdf"
+            ]
+          },
+          {
+            "group": "Consultations",
+            "pages": [
+              "api/consulta/query-invoice",
+              "api/consulta/query-boleta",
+              "api/consulta/bulk-query"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "api/config/correlatives",
+              "api/config/ubigeo",
+              "api/config/setup"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Electronic invoice generation (Facturas and Boletas)",
+    "Credit and debit notes support",
+    "XML UBL 2.1 generation and digital signing",
+    "Direct SUNAT integration with automatic CDR retrieval",
+    "Professional PDF generation with customizable templates",
+    "Multi-company and multi-branch support",
+    "OAuth2 authentication with Laravel Sanctum",
+    "Greenter 5.1 integration for SUNAT compliance",
+    "Automatic tax calculation (IGV, IVAP, ISC, ICBPER)",
+    "Daily summary generation for boletas",
+    "Document voiding and annulment",
+    "Ubigeo (geographic codes) database",
+    "Certificate management and validation",
+    "Query service for electronic documents (CPE)"
+  ],
+  "publicApiSurface": [
+    "POST /api/v1/invoices - Create invoice",
+    "POST /api/v1/boletas - Create boleta",
+    "POST /api/v1/invoices/{id}/send-sunat - Send invoice to SUNAT",
+    "GET /api/v1/invoices/{id}/download-xml - Download XML",
+    "GET /api/v1/invoices/{id}/download-cdr - Download CDR",
+    "GET /api/v1/invoices/{id}/download-pdf - Download PDF",
+    "POST /api/auth/login - Authenticate user",
+    "GET /api/v1/companies - List companies",
+    "POST /api/v1/companies - Create company",
+    "GET /api/v1/branches - List branches",
+    "POST /api/v1/clients - Create client",
+    "POST /api/v1/consulta-cpe/factura/{id} - Query invoice status",
+    "POST /api/v1/consulta-cpe/masivo - Bulk document query",
+    "GET /api/v1/ubigeos/search - Search geographic codes",
+    "GET /api/v1/correlatives/document-types - Get document types"
+  ]
+}
